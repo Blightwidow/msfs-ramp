@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+*.user
+
+# SimConnect SDK libraries — Microsoft-licensed, DO NOT commit.
+# Users copy these from their local MSFS SDK install (see README).
+MsfsAirportPreloader/lib/
+*.dll
+*.lib
+
+# Airport database — large, downloaded by the user from OurAirports (see README).
+MsfsAirportPreloader/airports.csv
+
+# Editor / OS cruft
+.vs/
+.idea/
+.DS_Store

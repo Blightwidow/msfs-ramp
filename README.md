@@ -1,0 +1,154 @@
+# MSFS Airport Preloader
+
+A background utility for **Microsoft Flight Simulator 2020** that eliminates the freeze/stutter
+that happens when you fly within ~25 NM of an add-on airport whose files live on a slow **HDD**.
+
+## Why the freeze happens (and what this actually fixes)
+
+At ~25 NM MSFS starts streaming the airport's scenery: BGLs, model libraries, textures. When those
+files sit on a spinning HDD, MSFS's loader thread **blocks on slow random reads**, and the frame
+that needs those assets stalls — you get a multi-second freeze.
+
+The problem is **disk I/O latency, not CPU**. Adding threads to MSFS wouldn't help (and isn't
+possible — MSFS is closed source). Parallel random reads on an HDD are actually *slower*.
+
+This tool takes a different, safe angle: it **pre-reads the airport's files into the Windows
+filesystem page cache before MSFS asks for them**. When MSFS then streams them at 25 NM, the OS
+serves the bytes from RAM instead of the HDD, so there's no stall.
+
+It does **not** inject into MSFS, hook its process, or modify any scenery. It only reads files and
+discards the bytes; the side effect is a hot OS cache. That's the whole mechanism — it cannot crash
+or corrupt the sim.
+
+> Honest caveat: the real cure is putting MSFS on an SSD. This tool exists because a size-constrained
+> HDD install can't do that. It targets separate add-on airport **packages** (which map cleanly to an
+> ICAO). It cannot isolate handcrafted airports baked into the giant `fs-base` packages.
+
+## How it works
+
+```
+SimConnect (aircraft lat/lon, 1 Hz)
+      │
+      ▼
+distance to every indexed airport ── within OuterRadius (default 60 NM)? ──► queue its package files
+      │
+      ▼
+background low-priority I/O thread ──► sequential read each file ──► warm OS page cache
+      (THREAD_MODE_BACKGROUND_BEGIN so reads yield to MSFS's own I/O; RAM-budget capped)
+```
+
+Prefetch fires at 60 NM so files are warm before MSFS's 25 NM load. Each package is warmed once per
+session.
+
+## Build
+
+> **Windows only.** SimConnect and the page-cache warming calls are Windows APIs; there is no
+> macOS/Linux build. The language (C#) doesn't change that.
+
+### Prerequisites
+
+- **Windows 10/11, x64.**
+- **.NET Framework 4.8 developer pack** — https://dotnet.microsoft.com/download/dotnet-framework/net48
+- A build toolchain, either:
+  - **Visual Studio 2022** (Community is fine) with the *.NET desktop development* workload, or
+  - **.NET SDK** (`dotnet` CLI) — https://dotnet.microsoft.com/download — which includes MSBuild.
+- **MSFS 2020 SDK** installed, for the SimConnect libraries (enable Dev Mode in the sim →
+  *Help → SDK Installer*, or download the SDK installer).
+
+Two files are **not** in this repo (Microsoft-licensed SDK binaries + a large dataset — both
+`.gitignore`d). Fetch them after cloning:
+
+### Step 1 — SimConnect libraries (from the MSFS 2020 SDK)
+
+Copy into `MsfsAirportPreloader/lib/` (create the folder):
+
+| File | Source in SDK | Kind |
+|------|---------------|------|
+| `Microsoft.FlightSimulator.SimConnect.dll` | `C:\MSFS SDK\SimConnect SDK\lib\managed\` | managed wrapper (referenced at build) |
+| `SimConnect.dll` | `C:\MSFS SDK\SimConnect SDK\lib\` | native (copied next to the exe) |
+
+(`C:\MSFS SDK` is the default SDK path; adjust if you installed elsewhere.)
+
+### Step 2 — Airport coordinate database (free, public domain)
+
+Download <https://davidmegginson.github.io/ourairports-data/airports.csv> and save it as
+`MsfsAirportPreloader/airports.csv`.
+
+### Step 3 — Compile
+
+**CLI:**
+```
+cd MsfsAirportPreloader
+dotnet build -c Release
+```
+
+**Visual Studio:** open `MsfsAirportPreloader/MsfsAirportPreloader.csproj`, set configuration to
+`Release`/`x64`, Build.
+
+Output: `bin/Release/net48/MsfsAirportPreloader.exe`. `SimConnect.dll`, `airports.csv`, and
+`preloader.ini` are copied next to it automatically.
+
+### Build troubleshooting
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| `metadata file '...Microsoft.FlightSimulator.SimConnect.dll' could not be found` | Step 1 not done, or wrong folder. DLL must be at `MsfsAirportPreloader/lib/`. |
+| Builds, but at runtime `Unable to load DLL 'SimConnect.dll'` | Native `SimConnect.dll` missing next to the exe. Confirm it's in `lib/` so the build copies it. |
+| `The reference assemblies for .NETFramework,Version=v4.8 were not found` | Install the .NET Framework 4.8 **developer pack** (targeting pack), not just the runtime. |
+| `BadImageFormatException` at startup | Architecture mismatch — build **x64** (managed + native SimConnect are 64-bit). |
+| Runtime: `no airports loaded from ...airports.csv` | Step 2 not done, or wrong header. Use the OurAirports file unmodified. |
+
+## Run
+
+1. Start MSFS, begin a flight.
+2. Run `MsfsAirportPreloader.exe`.
+
+It auto-detects your `InstalledPackagesPath` from `UserCfg.opt` (Store/Game Pass and Steam layouts),
+scans your Community + Official scenery packages once, then watches your position. Expected output:
+
+```
+[12:00:01] Loaded 78310 airport coordinates.
+[12:00:02] InstalledPackagesPath from ...UserCfg.opt: D:\MSFS\Packages
+[12:00:04] Indexed 42 scenery packages across 39 airports.
+[12:00:04] Waiting for MSFS... (start a flight; Ctrl+C to quit)
+[12:07:31] SimConnect connected to: KittyHawk
+[12:41:10] [approach] LFPG within 60 NM — queueing "flytampa-airport-lfpg" (1830 MB).
+[12:41:12] [prefetch] LFPG "flytampa-airport-lfpg": warmed 214 files, 1830 MB (session total 1830 MB)
+```
+
+By the time you reach 25 NM the files are in RAM — no freeze.
+
+## Configuration — `preloader.ini`
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `OuterRadiusNauticalMiles` | 60 | Distance at which warming starts. Keep > 25. Raise it if warming doesn't finish in time on a very slow HDD. |
+| `PollSeconds` | 2 | Position re-check interval. |
+| `RamBudgetMegabytes` | 4096 | Soft cap on bytes pulled into cache per session. Keep below (free RAM − MSFS's needs). |
+| `InstalledPackagesPath` | *(auto)* | Force the MSFS package folder if auto-detect fails. |
+| `AirportsCsvPath` | *(beside exe)* | Alternate airports.csv location. |
+| `Verbose` | true | Log every approach/prefetch line. |
+
+## Limitations / notes
+
+- **MSFS 2020 only** (paths + SimConnect SDK). MSFS 2024 would need different UserCfg paths and SDK.
+- Warms whole **add-on packages** attributed to an ICAO by folder name / manifest title. Airports
+  with no separate package (default handcrafted ones inside `fs-base`) aren't isolated.
+- Cache warming is best-effort: if free RAM is tight the OS may evict pages before MSFS reads them.
+  Lower `RamBudgetMegabytes` or close other apps if that happens.
+- Tune `OuterRadius` up if your HDD can't warm a 2 GB airport in the ~7 minutes between 60 and 25 NM
+  at approach speed.
+
+## Project layout
+
+```
+MsfsAirportPreloader/
+  Program.cs               entry + main loop (position → distance → enqueue)
+  SimConnectClient.cs      SimConnect connection, aircraft position at 1 Hz
+  PackagePathResolver.cs   find InstalledPackagesPath from UserCfg.opt
+  PackageIndex.cs          scan packages, map ICAO → on-disk files (via layout.json)
+  AirportDatabase.cs       OurAirports CSV → ICAO coordinates
+  Prefetcher.cs            low-priority background thread that warms the page cache
+  Geo.cs                   haversine distance
+  Config.cs                preloader.ini loader
+```
