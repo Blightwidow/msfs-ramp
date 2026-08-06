@@ -139,7 +139,11 @@ namespace MsfsAirportPreloader
             }
 
             List<AirportState> states = _engine.Snapshot();
-            states.Sort((a, b) => a.DistanceNauticalMiles.CompareTo(b.DistanceNauticalMiles));
+            states.Sort((a, b) =>
+            {
+                int byState = StateRank(a.State).CompareTo(StateRank(b.State));
+                return byState != 0 ? byState : a.DistanceNauticalMiles.CompareTo(b.DistanceNauticalMiles);
+            });
 
             _airportList.BeginUpdate();
             _airportList.Items.Clear();
@@ -171,6 +175,19 @@ namespace MsfsAirportPreloader
                 ? $"{_engine.IndexedPackageCount} packages / {_engine.IndexedAirportCount} airports indexed"
                 : "indexing...";
             return $"{sim}   |   {index}   |   {trackedCount} airports tracked";
+        }
+
+        /// <summary>List ordering: readiest first — Loaded, Warming, Queued, Skipped, then Unloaded.</summary>
+        private static int StateRank(PrefetchState state)
+        {
+            switch (state)
+            {
+                case PrefetchState.Loaded: return 0;
+                case PrefetchState.Warming: return 1;
+                case PrefetchState.Queued: return 2;
+                case PrefetchState.Skipped: return 3;
+                default: return 4; // OutOfRange / Unloaded
+            }
         }
 
         private static string StatusText(PrefetchState state)
