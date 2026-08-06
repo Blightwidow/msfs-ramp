@@ -9,6 +9,15 @@ namespace MsfsAirportPreloader
     /// <summary>Runtime settings, persisted to preloader.ini next to the executable.</summary>
     internal sealed class Config
     {
+        /// <summary>MSFS starts streaming airport scenery around here; warming must begin before it.</summary>
+        public const double MsfsLoadRadiusNauticalMiles = 25.0;
+
+        /// <summary>
+        /// Floor for the outer radius: comfortably above the 25 NM load radius so warming both
+        /// starts and has time to finish before MSFS reads the files.
+        /// </summary>
+        public const double MinimumOuterRadiusNauticalMiles = 30.0;
+
         /// <summary>Start warming an airport's files once the aircraft is within this range.</summary>
         public double OuterRadiusNauticalMiles { get; set; } = 60.0;
 
@@ -57,7 +66,9 @@ namespace MsfsAirportPreloader
                 values[line.Substring(0, equalsIndex).Trim()] = line.Substring(equalsIndex + 1).Trim();
             }
 
-            config.OuterRadiusNauticalMiles = ReadDouble(values, "OuterRadiusNauticalMiles", config.OuterRadiusNauticalMiles);
+            config.OuterRadiusNauticalMiles = Math.Max(
+                MinimumOuterRadiusNauticalMiles,
+                ReadDouble(values, "OuterRadiusNauticalMiles", config.OuterRadiusNauticalMiles));
             config.PollSeconds = ReadDouble(values, "PollSeconds", config.PollSeconds);
             config.RamBudgetMegabytes = (long)ReadDouble(values, "RamBudgetMegabytes", config.RamBudgetMegabytes);
             config.InstalledPackagesPathOverride = ReadString(values, "InstalledPackagesPath", config.InstalledPackagesPathOverride);

@@ -38,7 +38,8 @@ namespace MsfsAirportPreloader
             Height = 430;
 
             int y = 16;
-            AddField("Outer radius (NM) — start warming within this distance:", _outerRadius, ref y);
+            AddField($"Outer radius (NM) — start warming within this distance (min {Config.MinimumOuterRadiusNauticalMiles:0}):",
+                _outerRadius, ref y);
             AddField("Poll interval (seconds):", _pollSeconds, ref y);
             AddField("RAM budget (MB) — max held in cache (applies after restart):", _ramBudget, ref y);
             AddPathField("MSFS package folder (blank = auto-detect):", _packagesPath, browseFolder: true, ref y);
@@ -68,7 +69,14 @@ namespace MsfsAirportPreloader
                 Left = ClientSize.Width - 196,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
             };
-            okButton.Click += (_, __) => Apply();
+            // If validation fails, override the button's DialogResult so the dialog stays open.
+            okButton.Click += (_, __) =>
+            {
+                if (!Apply())
+                {
+                    DialogResult = DialogResult.None;
+                }
+            };
             var cancelButton = new Button
             {
                 Text = "Cancel",
@@ -139,10 +147,21 @@ namespace MsfsAirportPreloader
             _verbose.Checked = _original.Verbose;
         }
 
-        private void Apply()
+        private bool Apply()
         {
+            double outerRadius = ParseDouble(_outerRadius.Text, _original.OuterRadiusNauticalMiles);
+            if (outerRadius < Config.MinimumOuterRadiusNauticalMiles)
+            {
+                MessageBox.Show(this,
+                    $"Outer radius must be at least {Config.MinimumOuterRadiusNauticalMiles:0} NM.\n\n" +
+                    $"MSFS starts loading airport scenery around {Config.MsfsLoadRadiusNauticalMiles:0} NM, " +
+                    "so warming has to begin before that with room to finish.",
+                    "Outer radius too low", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
             var updated = _original.Clone();
-            updated.OuterRadiusNauticalMiles = ParseDouble(_outerRadius.Text, _original.OuterRadiusNauticalMiles);
+            updated.OuterRadiusNauticalMiles = outerRadius;
             updated.PollSeconds = ParseDouble(_pollSeconds.Text, _original.PollSeconds);
             updated.RamBudgetMegabytes = (long)ParseDouble(_ramBudget.Text, _original.RamBudgetMegabytes);
             updated.InstalledPackagesPathOverride = _packagesPath.Text.Trim();
@@ -157,6 +176,7 @@ namespace MsfsAirportPreloader
             updated.Save(_iniPath);
             StartupRegistry.Apply(updated.StartWithWindows, null);
             _engine.ApplyConfig(updated, rescan);
+            return true;
         }
 
         private static double ParseDouble(string text, double fallback)

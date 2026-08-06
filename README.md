@@ -138,7 +138,7 @@ only real quit). Enable **Start with Windows** in Settings to launch it at login
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `OuterRadiusNauticalMiles` | 60 | Distance at which warming starts. Keep > 25. Raise it if warming doesn't finish in time on a very slow HDD. |
+| `OuterRadiusNauticalMiles` | 60 | Distance at which warming starts. **Enforced minimum 30 NM** (MSFS loads scenery ~25 NM, so warming must start before that). Raise it if warming doesn't finish in time on a very slow HDD. |
 | `PollSeconds` | 2 | Position re-check interval. |
 | `RamBudgetMegabytes` | 4096 | Cap on bytes held in cache at once (freed as airports leave range). Keep below (free RAM − MSFS's needs). Change applies after restart. |
 | `InstalledPackagesPath` | *(auto)* | Force the MSFS package folder if auto-detect fails. |
