@@ -28,7 +28,7 @@ namespace MsfsAirportPreloader
     }
 
     /// <summary>
-    /// The Apron main window: a dark instrument table. A custom toolbar carries the mark and the
+    /// The RAMP main window: a dark instrument table. A custom toolbar carries the mark and the
     /// live connection status; a stats strip shows the RAM cache meter and per-state counters; the
     /// owner-drawn list gives every airport a coloured state rail, a chip or an animated warming
     /// bar; a footer summarises the index. The log lives in a panel toggled from the toolbar.
@@ -105,7 +105,7 @@ namespace MsfsAirportPreloader
 
         private void BuildLayout()
         {
-            Text = "Apron";
+            Text = "RAMP";
             Width = 900;
             Height = 620;
             MinimumSize = new Size(720, 460);
@@ -138,7 +138,7 @@ namespace MsfsAirportPreloader
             _toolbar.BackColor = Theme.Raised;
             _toolbar.Paint += PaintToolbar;
 
-            int left = 132; // clears the logo tile and the APRON wordmark painted behind
+            int left = 132; // clears the logo tile and the RAMP wordmark painted behind
             Button rescan = MakeToolButton("Rescan", ref left);
             rescan.Click += (_, __) => _engine.ApplyConfig(_engine.CurrentConfig, rescanPackages: true);
             Button log = MakeToolButton("Log", ref left);
@@ -186,7 +186,7 @@ namespace MsfsAirportPreloader
 
             // Logo tile + wordmark.
             Theme.DrawLogo(g, new RectangleF(14, 12, 20, 20), Theme.RaisedHover, Theme.Accent, Theme.Border);
-            TextRenderer.DrawText(g, "APRON", Theme.Mono(9.5f, FontStyle.Bold),
+            TextRenderer.DrawText(g, "RAMP", Theme.Mono(9.5f, FontStyle.Bold),
                 new Point(44, 15), Theme.Text, TextFormatFlags.NoPadding);
 
             // Right side: connection dot + status, then flight state.
@@ -581,7 +581,7 @@ namespace MsfsAirportPreloader
 
         private void BuildTray()
         {
-            _tray.Text = "Apron";
+            _tray.Text = "RAMP";
             _tray.DoubleClick += (_, __) => RestoreFromTray();
             UpdateTrayIcon(Theme.Unloaded);
             _tray.Visible = true;
@@ -754,7 +754,7 @@ namespace MsfsAirportPreloader
                 e.Cancel = true;
                 Hide();
                 _tray.ShowBalloonTip(3000, "Still running",
-                    "Apron keeps running in the tray. Right-click the icon to exit.",
+                    "RAMP keeps running in the tray. Right-click the icon to exit.",
                     ToolTipIcon.Info);
                 return;
             }

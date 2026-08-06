@@ -5,7 +5,7 @@ using System.Windows.Forms;
 
 namespace MsfsAirportPreloader
 {
-    /// <summary>A pill toggle in the Apron style — accent when on, sunken when off.</summary>
+    /// <summary>A pill toggle in the RAMP style — accent when on, sunken when off.</summary>
     internal sealed class ToggleSwitch : Control
     {
         private bool _checked;

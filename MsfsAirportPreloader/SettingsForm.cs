@@ -7,7 +7,7 @@ using System.Windows.Forms;
 namespace MsfsAirportPreloader
 {
     /// <summary>
-    /// Apron settings: the same values as before, laid out as labelled dark sections —
+    /// RAMP settings: the same values as before, laid out as labelled dark sections —
     /// Range &amp; Timing, Memory (a draggable RAM budget slider), Paths, and Behaviour toggles.
     /// The outer-radius field validates inline in amber and is clamped up to the minimum on save,
     /// never blocking with a dialog — "amber, never red; nothing is lost".

@@ -8,7 +8,7 @@ using System.Windows.Forms;
 namespace MsfsAirportPreloader
 {
     /// <summary>
-    /// The "Apron" visual language: a dark instrument-panel palette, the IBM Plex type pair
+    /// The "RAMP" visual language: a dark instrument-panel palette, the IBM Plex type pair
     /// (with graceful fallback to fonts that ship with Windows), and the handful of custom
     /// paint primitives — rounded surfaces, status chips, the striped warming bar — that the
     /// design needs and stock WinForms controls can't draw. Everything here is static and
@@ -205,7 +205,7 @@ namespace MsfsAirportPreloader
             g.Restore(saved);
         }
 
-        /// <summary>The Apron mark: a rounded tile with a tilted "runway" bar through it.</summary>
+        /// <summary>The RAMP mark: a rounded tile with a tilted "runway" bar through it.</summary>
         public static void DrawLogo(Graphics g, RectangleF rect, Color tile, Color bar, Color barBorder)
         {
             SmoothingMode previous = g.SmoothingMode;
