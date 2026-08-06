@@ -30,8 +30,14 @@ namespace MsfsAirportPreloader
         private const int WM_USER_SIMCONNECT = 0x0402;
 
         private enum Definition { AircraftState }
-        private enum Request { AircraftState, SimState }
-        private enum SystemEvent { Sim }
+        private enum Request { AircraftState }
+
+        // CAMERA STATE values that mean the user is actually in a flight (cockpit, external,
+        // drone, showcase, …). 11 = Waiting (main menu), 12 = World Map, and higher values are
+        // other non-flight screens — the "Sim" event is unreliable here because the menu runs a
+        // live background world, so it reads 1 even in menus.
+        private const double CameraInFlightMin = 2.0;
+        private const double CameraInFlightMax = 10.0;
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         private struct AircraftStateStruct
@@ -39,6 +45,7 @@ namespace MsfsAirportPreloader
             public double Latitude;
             public double Longitude;
             public double GroundSpeedKnots;
+            public double CameraState;
         }
 
         private readonly Action<string> _log;
@@ -79,14 +86,14 @@ namespace MsfsAirportPreloader
                     _simConnect.OnRecvQuit += OnRecvQuit;
                     _simConnect.OnRecvException += OnRecvException;
                     _simConnect.OnRecvSimobjectData += OnRecvSimobjectData;
-                    _simConnect.OnRecvEvent += OnRecvEvent;
-                    _simConnect.OnRecvSystemState += OnRecvSystemState;
 
                     _simConnect.AddToDataDefinition(Definition.AircraftState, "PLANE LATITUDE", "degrees",
                         SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
                     _simConnect.AddToDataDefinition(Definition.AircraftState, "PLANE LONGITUDE", "degrees",
                         SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
                     _simConnect.AddToDataDefinition(Definition.AircraftState, "GROUND VELOCITY", "knots",
+                        SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
+                    _simConnect.AddToDataDefinition(Definition.AircraftState, "CAMERA STATE", "Enum",
                         SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
                     _simConnect.RegisterDataDefineStruct<AircraftStateStruct>(Definition.AircraftState);
 
@@ -109,34 +116,15 @@ namespace MsfsAirportPreloader
             _connected = true;
             ConnectionChanged?.Invoke(true);
 
+            // Steady 1 Hz (not CHANGED) so readiness and position update even when parked, and the
+            // camera-state gate flips promptly on the menu ⇄ flight transition.
             _simConnect.RequestDataOnSimObject(
                 Request.AircraftState,
                 Definition.AircraftState,
                 SimConnect.SIMCONNECT_OBJECT_ID_USER,
                 SIMCONNECT_PERIOD.SECOND,
-                SIMCONNECT_DATA_REQUEST_FLAG.CHANGED,
+                SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
                 0, 0, 0);
-
-            // Gate warming on the sim actually being in a flight: the "Sim" event/state is 1 while
-            // flying and 0 in menus/loading, so we never fight the loading screen for the disk.
-            _simConnect.SubscribeToSystemEvent(SystemEvent.Sim, "Sim");
-            _simConnect.RequestSystemState(Request.SimState, "Sim"); // seed the initial value
-        }
-
-        private void OnRecvEvent(SimConnect sender, SIMCONNECT_RECV_EVENT data)
-        {
-            if (data.uEventID == (uint)SystemEvent.Sim)
-            {
-                SetSimRunning(data.dwData != 0);
-            }
-        }
-
-        private void OnRecvSystemState(SimConnect sender, SIMCONNECT_RECV_SYSTEM_STATE data)
-        {
-            if (data.dwRequestID == (uint)Request.SimState)
-            {
-                SetSimRunning(data.dwInteger != 0);
-            }
         }
 
         private void SetSimRunning(bool running)
@@ -147,7 +135,7 @@ namespace MsfsAirportPreloader
             }
 
             _simRunning = running;
-            _log?.Invoke(running ? "Sim running — warming enabled." : "Sim in menu/loading — warming paused.");
+            _log?.Invoke(running ? "In flight — warming enabled." : "In menu/loading — warming paused.");
         }
 
         private void OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)
@@ -169,6 +157,12 @@ namespace MsfsAirportPreloader
             }
 
             var state = (AircraftStateStruct)data.dwData[0];
+
+            // Only a real flight camera counts as "in flight" — this excludes the main menu (whose
+            // live world background otherwise reads as running) and the loading screen.
+            bool inFlight = state.CameraState >= CameraInFlightMin && state.CameraState <= CameraInFlightMax;
+            SetSimRunning(inFlight);
+
             PositionUpdated?.Invoke(new AircraftPosition(state.Latitude, state.Longitude, state.GroundSpeedKnots));
         }
 

@@ -8,7 +8,7 @@ namespace MsfsAirportPreloader
     internal static class StartupRegistry
     {
         private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string ValueName = "MsfsAirportPreloader";
+        private const string ValueName = "RAMP";
 
         public static void Apply(bool enabled, Action<string> log)
         {

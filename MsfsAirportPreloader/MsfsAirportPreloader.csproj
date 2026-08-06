@@ -8,7 +8,7 @@
     <LangVersion>9.0</LangVersion>
     <Platform>x64</Platform>
     <PlatformTarget>x64</PlatformTarget>
-    <AssemblyName>MsfsAirportPreloader</AssemblyName>
+    <AssemblyName>RAMP</AssemblyName>
     <RootNamespace>MsfsAirportPreloader</RootNamespace>
     <Nullable>disable</Nullable>
   </PropertyGroup>
