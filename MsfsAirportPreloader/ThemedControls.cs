@@ -103,7 +103,7 @@ namespace MsfsAirportPreloader
             }
         }
 
-        private const float Handle = 14f;
+        private const float ThumbSize = 14f;
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
@@ -130,8 +130,8 @@ namespace MsfsAirportPreloader
 
         private void SetValueFromX(int x)
         {
-            float usable = Width - Handle;
-            float fraction = usable <= 0 ? 0 : (x - Handle / 2f) / usable;
+            float usable = Width - ThumbSize;
+            float fraction = usable <= 0 ? 0 : (x - ThumbSize / 2f) / usable;
             fraction = Math.Max(0f, Math.Min(1f, fraction));
             Value = Math.Round(_minimum + fraction * (_maximum - _minimum));
         }
@@ -142,7 +142,7 @@ namespace MsfsAirportPreloader
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             float centerY = Height / 2f;
-            var track = new RectangleF(Handle / 2f, centerY - 3f, Width - Handle, 6f);
+            var track = new RectangleF(ThumbSize / 2f, centerY - 3f, Width - ThumbSize, 6f);
             Theme.FillRoundedRect(g, track, 3f, Theme.InputBg);
 
             float fraction = (_maximum - _minimum) <= 0 ? 0 : (float)((_value - _minimum) / (_maximum - _minimum));
@@ -152,8 +152,8 @@ namespace MsfsAirportPreloader
 
             using var knob = new SolidBrush(Theme.Text);
             using var ring = new Pen(Theme.Window, 2f);
-            g.FillEllipse(knob, handleX - Handle / 2f, centerY - Handle / 2f, Handle, Handle);
-            g.DrawEllipse(ring, handleX - Handle / 2f, centerY - Handle / 2f, Handle, Handle);
+            g.FillEllipse(knob, handleX - ThumbSize / 2f, centerY - ThumbSize / 2f, ThumbSize, ThumbSize);
+            g.DrawEllipse(ring, handleX - ThumbSize / 2f, centerY - ThumbSize / 2f, ThumbSize, ThumbSize);
         }
     }
 }
