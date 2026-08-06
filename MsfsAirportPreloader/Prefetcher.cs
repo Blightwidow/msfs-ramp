@@ -11,26 +11,22 @@ namespace MsfsAirportPreloader
     /// sequentially on a low-priority background-I/O thread so that when MSFS later
     /// streams the same files (at ~25 NM) they are served from RAM instead of the HDD.
     ///
-    /// Pending packages are warmed in ascending distance order: the closest airport
-    /// (your destination as you approach) always warms before farther enroute airports,
-    /// so it can never be starved by them. Distances are refreshed on every position poll.
+    /// Holds a state machine per package (OutOfRange → Queued → Warming → Loaded, or
+    /// Skipped when the RAM budget is full). Warms the CLOSEST queued package first,
+    /// using distances refreshed on every position poll. Flying far enough away calls
+    /// Release(), which returns the package to OutOfRange AND frees its share of the RAM
+    /// budget so later airports aren't starved.
     ///
     /// This does NOT inject into MSFS and does NOT parse/alter scenery. It only reads
     /// bytes and throws them away; the side effect is a hot OS cache.
     /// </summary>
     internal sealed class Prefetcher : IDisposable
     {
-        private sealed class Pending
-        {
-            public PackageEntry Entry;
-            public double DistanceNauticalMiles;
-        }
-
         private readonly long _ramBudgetBytes;
         private readonly Action<string> _log;
         private readonly object _gate = new object();
-        private readonly Dictionary<string, Pending> _pending = new Dictionary<string, Pending>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, AirportState> _states = new Dictionary<string, AirportState>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PackageEntry> _entries = new Dictionary<string, PackageEntry>(StringComparer.OrdinalIgnoreCase);
         private readonly Thread _worker;
         private readonly AutoResetEvent _signal = new AutoResetEvent(false);
         private volatile bool _running = true;
@@ -49,37 +45,82 @@ namespace MsfsAirportPreloader
             _worker.Start();
         }
 
-        /// <summary>
-        /// Report that <paramref name="entry"/> is currently <paramref name="distanceNauticalMiles"/>
-        /// away. Adds it to the pending set (or refreshes its distance so the priority order stays
-        /// current). No-op once the package has been warmed this session.
-        /// </summary>
+        private static string Key(PackageEntry entry) => entry.Icao + "|" + entry.PackageName;
+
+        /// <summary>Report a package's current distance. Queues it for warming if it isn't already.</summary>
         public void Observe(PackageEntry entry, double distanceNauticalMiles)
         {
             string key = Key(entry);
             lock (_gate)
             {
-                if (_done.Contains(key))
+                _entries[key] = entry;
+                if (!_states.TryGetValue(key, out AirportState state))
                 {
-                    return;
+                    state = new AirportState
+                    {
+                        Icao = entry.Icao,
+                        PackageName = entry.PackageName,
+                        TotalBytes = entry.TotalBytes,
+                        State = PrefetchState.OutOfRange,
+                    };
+                    _states[key] = state;
                 }
 
-                if (_pending.TryGetValue(key, out Pending existing))
-                {
-                    existing.DistanceNauticalMiles = distanceNauticalMiles;
-                    return;
-                }
+                state.DistanceNauticalMiles = distanceNauticalMiles;
 
-                _pending[key] = new Pending { Entry = entry, DistanceNauticalMiles = distanceNauticalMiles };
-                _log?.Invoke(
-                    $"[queue] {entry.Icao} \"{entry.PackageName}\" at {distanceNauticalMiles:0} NM " +
-                    $"({entry.TotalBytes / (1024 * 1024)} MB) — {_pending.Count} pending.");
+                // Re-arm from OutOfRange or a previous budget Skip; leave Warming/Loaded alone.
+                if (state.State == PrefetchState.OutOfRange || state.State == PrefetchState.Skipped)
+                {
+                    state.State = PrefetchState.Queued;
+                    _log?.Invoke($"[queue] {entry.Icao} \"{entry.PackageName}\" at {distanceNauticalMiles:0} NM " +
+                                 $"({entry.TotalBytes / (1024 * 1024)} MB)");
+                    _signal.Set();
+                }
             }
-
-            _signal.Set();
         }
 
-        private static string Key(PackageEntry entry) => entry.Icao + "|" + entry.PackageName;
+        /// <summary>Flown far enough away: unload the package and free its RAM budget share.</summary>
+        public void Release(PackageEntry entry)
+        {
+            string key = Key(entry);
+            lock (_gate)
+            {
+                if (!_states.TryGetValue(key, out AirportState state))
+                {
+                    return;
+                }
+
+                if (state.State == PrefetchState.Warming || state.State == PrefetchState.OutOfRange)
+                {
+                    return; // don't interrupt an in-progress warm; nothing to do if already out
+                }
+
+                if (state.WarmedBytes > 0)
+                {
+                    Interlocked.Add(ref _bytesWarmed, -state.WarmedBytes);
+                    _log?.Invoke($"[unload] {state.Icao} \"{state.PackageName}\" — freed " +
+                                 $"{state.WarmedBytes / (1024 * 1024)} MB budget");
+                }
+
+                state.WarmedBytes = 0;
+                state.State = PrefetchState.OutOfRange;
+            }
+        }
+
+        /// <summary>Thread-safe copy of every known airport's status, for the UI.</summary>
+        public List<AirportState> Snapshot()
+        {
+            lock (_gate)
+            {
+                var list = new List<AirportState>(_states.Count);
+                foreach (AirportState state in _states.Values)
+                {
+                    list.Add(state.Clone());
+                }
+
+                return list;
+            }
+        }
 
         private void WorkerLoop()
         {
@@ -88,28 +129,33 @@ namespace MsfsAirportPreloader
 
             while (_running)
             {
-                Pending next = TakeClosest();
-                if (next == null)
+                (AirportState state, PackageEntry entry) = TakeClosestQueued();
+                if (state == null)
                 {
                     _signal.WaitOne(1000);
                     continue;
                 }
 
-                WarmPackage(next, buffer);
+                WarmPackage(state, entry, buffer);
             }
 
             EndBackgroundIoMode();
         }
 
-        /// <summary>Remove and return the closest pending package, marking it done. Null if none.</summary>
-        private Pending TakeClosest()
+        /// <summary>Pick the nearest Queued package, mark it Warming, and return it.</summary>
+        private (AirportState, PackageEntry) TakeClosestQueued()
         {
             lock (_gate)
             {
                 string closestKey = null;
-                Pending closest = null;
-                foreach (KeyValuePair<string, Pending> pair in _pending)
+                AirportState closest = null;
+                foreach (KeyValuePair<string, AirportState> pair in _states)
                 {
+                    if (pair.Value.State != PrefetchState.Queued)
+                    {
+                        continue;
+                    }
+
                     if (closest == null || pair.Value.DistanceNauticalMiles < closest.DistanceNauticalMiles)
                     {
                         closest = pair.Value;
@@ -119,23 +165,25 @@ namespace MsfsAirportPreloader
 
                 if (closestKey == null)
                 {
-                    return null;
+                    return (null, null);
                 }
 
-                _pending.Remove(closestKey);
-                _done.Add(closestKey);
-                return closest;
+                closest.State = PrefetchState.Warming;
+                return (closest, _entries[closestKey]);
             }
         }
 
-        private void WarmPackage(Pending pending, byte[] buffer)
+        private void WarmPackage(AirportState state, PackageEntry entry, byte[] buffer)
         {
-            PackageEntry entry = pending.Entry;
             if (_bytesWarmed >= _ramBudgetBytes)
             {
-                _log?.Invoke(
-                    $"[prefetch] RAM budget reached; skipping {entry.Icao} ({entry.PackageName}) " +
-                    $"at {pending.DistanceNauticalMiles:0} NM");
+                lock (_gate)
+                {
+                    state.State = PrefetchState.Skipped;
+                }
+
+                _log?.Invoke($"[prefetch] RAM budget full; skipping {entry.Icao} ({entry.PackageName}) " +
+                             $"at {state.DistanceNauticalMiles:0} NM");
                 return;
             }
 
@@ -149,14 +197,30 @@ namespace MsfsAirportPreloader
                     break;
                 }
 
-                warmedThisPackage += WarmFile(filePath, buffer);
+                long warmed = WarmFile(filePath, buffer);
+                warmedThisPackage += warmed;
+                lock (_gate)
+                {
+                    state.WarmedBytes += warmed;
+                }
+
                 fileCount++;
             }
 
-            _log?.Invoke(
-                $"[prefetch] {entry.Icao} \"{entry.PackageName}\" ({pending.DistanceNauticalMiles:0} NM): " +
-                $"warmed {fileCount} files, {warmedThisPackage / (1024 * 1024)} MB " +
-                $"(session total {_bytesWarmed / (1024 * 1024)} MB)");
+            lock (_gate)
+            {
+                // Only finalize if it wasn't released mid-warm.
+                if (state.State == PrefetchState.Warming)
+                {
+                    state.State = _bytesWarmed >= _ramBudgetBytes && warmedThisPackage < entry.TotalBytes
+                        ? PrefetchState.Skipped
+                        : PrefetchState.Loaded;
+                }
+            }
+
+            _log?.Invoke($"[prefetch] {entry.Icao} \"{entry.PackageName}\" ({state.DistanceNauticalMiles:0} NM): " +
+                         $"warmed {fileCount} files, {warmedThisPackage / (1024 * 1024)} MB " +
+                         $"(cache total {_bytesWarmed / (1024 * 1024)} MB)");
         }
 
         private long WarmFile(string filePath, byte[] buffer)
@@ -212,26 +276,14 @@ namespace MsfsAirportPreloader
 
         private void BeginBackgroundIoMode()
         {
-            try
-            {
-                SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
-            }
-            catch
-            {
-                // Non-fatal: falls back to plain ThreadPriority.Lowest.
-            }
+            try { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN); }
+            catch { /* falls back to ThreadPriority.Lowest */ }
         }
 
         private void EndBackgroundIoMode()
         {
-            try
-            {
-                SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
-            }
-            catch
-            {
-                // ignore
-            }
+            try { SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END); }
+            catch { /* ignore */ }
         }
     }
 }

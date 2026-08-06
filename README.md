@@ -40,10 +40,14 @@ background low-priority I/O thread ──► sequential read each file ──►
       (THREAD_MODE_BACKGROUND_BEGIN so reads yield to MSFS's own I/O; RAM-budget capped)
 ```
 
-Prefetch fires at 60 NM so files are warm before MSFS's 25 NM load. Each package is warmed once per
-session. Pending packages are warmed **closest-first** — distances refresh every poll, so the airport
-you're actually approaching (your destination) always wins over farther enroute airports and can't be
-starved by them when RAM is tight.
+Prefetch fires at 60 NM so files are warm before MSFS's 25 NM load. Pending packages are warmed
+**closest-first** — distances refresh every poll, so the airport you're actually approaching (your
+destination) always wins over farther enroute airports and can't be starved by them when RAM is tight.
+Fly ~10 NM beyond the outer radius and a package is **unloaded** (its RAM-budget share is freed and it
+returns to *Unloaded* in the list), so a long flight never exhausts the budget.
+
+The app is a **WinForms tray application**: it keeps running in the background even with MSFS closed,
+and connects/reconnects automatically each time the sim starts.
 
 ## Build
 
@@ -105,23 +109,30 @@ Output: `bin/Release/net48/MsfsAirportPreloader.exe`. `SimConnect.dll`, `airport
 
 ## Run
 
-1. Start MSFS, begin a flight.
-2. Run `MsfsAirportPreloader.exe`.
+Launch `MsfsAirportPreloader.exe` — it can run with MSFS open or closed. On first start it loads the
+airport database and scans your `Community` + `Official` scenery packages once (auto-detecting
+`InstalledPackagesPath` from `UserCfg.opt`, Store/Game Pass and Steam layouts). Then it waits for MSFS
+and connects automatically; start a flight and it tracks your position.
 
-It auto-detects your `InstalledPackagesPath` from `UserCfg.opt` (Store/Game Pass and Steam layouts),
-scans your Community + Official scenery packages once, then watches your position. Expected output:
+### Window
 
-```
-[12:00:01] Loaded 78310 airport coordinates.
-[12:00:02] InstalledPackagesPath from ...UserCfg.opt: D:\MSFS\Packages
-[12:00:04] Indexed 42 scenery packages across 39 airports.
-[12:00:04] Waiting for MSFS... (start a flight; Ctrl+C to quit)
-[12:07:31] SimConnect connected to: KittyHawk
-[12:41:10] [queue] LFPG "flytampa-airport-lfpg" at 58 NM (1830 MB) — 1 pending.
-[12:41:12] [prefetch] LFPG "flytampa-airport-lfpg" (57 NM): warmed 214 files, 1830 MB (session total 1830 MB)
-```
+- **Airport list** — every airport package you've flown near, with live status:
+  | Status | Meaning |
+  |--------|---------|
+  | `Unloaded` | out of range (or flown far enough away that it was released) |
+  | `Queued` | in range, waiting for the warming thread |
+  | `Loading...` | being read into the page cache now |
+  | `Loaded` | warm — files resident in RAM, ready for MSFS's 25 NM load |
+  | `Skipped` | in range but RAM budget was full |
+- **Log pane** — connection + queue/prefetch/unload events.
+- **Status bar** — MSFS connection state, index counts, airports tracked.
+- **Settings** button — edit everything (below) without touching the .ini by hand.
 
-By the time you reach 25 NM the files are in RAM — no freeze.
+### Background / tray
+
+Closing the window (the **X**) minimizes to the system tray — the engine keeps running so it stays
+connected across sim restarts. Right-click the tray icon for **Open / Settings / Exit** (Exit is the
+only real quit). Enable **Start with Windows** in Settings to launch it at login and forget about it.
 
 ## Configuration — `preloader.ini`
 
@@ -129,10 +140,15 @@ By the time you reach 25 NM the files are in RAM — no freeze.
 |-----|---------|---------|
 | `OuterRadiusNauticalMiles` | 60 | Distance at which warming starts. Keep > 25. Raise it if warming doesn't finish in time on a very slow HDD. |
 | `PollSeconds` | 2 | Position re-check interval. |
-| `RamBudgetMegabytes` | 4096 | Soft cap on bytes pulled into cache per session. Keep below (free RAM − MSFS's needs). |
+| `RamBudgetMegabytes` | 4096 | Cap on bytes held in cache at once (freed as airports leave range). Keep below (free RAM − MSFS's needs). Change applies after restart. |
 | `InstalledPackagesPath` | *(auto)* | Force the MSFS package folder if auto-detect fails. |
 | `AirportsCsvPath` | *(beside exe)* | Alternate airports.csv location. |
-| `Verbose` | true | Log every approach/prefetch line. |
+| `StartWithWindows` | false | Launch the app at Windows login (HKCU Run key). |
+| `Verbose` | true | Log every queue/prefetch line. |
+
+All of these are editable in the **Settings** panel; it writes them back to `preloader.ini`. Radius
+and poll interval apply live; changing the package/CSV paths triggers a rescan; RAM budget applies on
+next restart.
 
 ## Limitations / notes
 
@@ -148,12 +164,17 @@ By the time you reach 25 NM the files are in RAM — no freeze.
 
 ```
 MsfsAirportPreloader/
-  Program.cs               entry + main loop (position → distance → enqueue)
-  SimConnectClient.cs      SimConnect connection, aircraft position at 1 Hz
+  Program.cs               WinForms entry point
+  MainForm.cs              tray window: airport list + log + status
+  SettingsForm.cs          editable settings dialog
+  Engine.cs                orchestrates everything on background threads
+  SimConnectClient.cs      SimConnect connection w/ auto-reconnect, position at 1 Hz
   PackagePathResolver.cs   find InstalledPackagesPath from UserCfg.opt
   PackageIndex.cs          scan packages, map ICAO → on-disk files (via layout.json)
   AirportDatabase.cs       OurAirports CSV → ICAO coordinates
-  Prefetcher.cs            low-priority background thread that warms the page cache
+  Prefetcher.cs            closest-first page-cache warmer w/ load/unload state machine
+  AirportState.cs          per-airport status model (Unloaded/Queued/Loading/Loaded/Skipped)
+  StartupRegistry.cs       "start with Windows" registry entry
   Geo.cs                   haversine distance
-  Config.cs                preloader.ini loader
+  Config.cs                preloader.ini load/save
 ```

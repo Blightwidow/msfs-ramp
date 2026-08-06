@@ -72,6 +72,21 @@ Residual: the RAM budget is still **monotonic** (never released). Not a problem 
 spend is nearest-first, but a skipped (far) airport stays marked done and won't retry even if you
 later divert to it. Full fix = drop the session counter + rely on OS LRU eviction (alt 2, backlog).
 
+### WinForms tray UI + load/unload state machine (implemented v1.2)
+Turned the console app into a WinForms tray application (`Engine` orchestrator + `MainForm` +
+`SettingsForm`). Chose WinForms over WPF: ships with net48, native `NotifyIcon` tray, zero extra deps.
+- **Runs in background, sim on or off.** `SimConnectClient` gained an auto-reconnect lifecycle
+  (`EnsureConnected` polled on a loop; clean teardown on sim quit, reconnect on next launch). Fixes the
+  old bug where `IsConnected` stayed true after the sim closed and never reconnected. Window X-close
+  hides to tray; only the tray Exit item quits.
+- **Airport list shows load/unload.** `Prefetcher` now holds an `AirportState` per package
+  (OutOfRange → Queued → Warming → Loaded / Skipped). UI polls `Snapshot()` on a 750 ms timer.
+- **Unload on fly-away.** `Prefetcher.Release()` (called by `Engine` when distance > outer + 10 NM
+  hysteresis) returns the package to OutOfRange **and decrements the RAM counter** — so the budget is
+  no longer monotonic; a long flight can't exhaust it. Resolves the residual from v1.1.
+- **Settings panel** edits all ini keys, writes back via `Config.Save`, applies live (radius/poll),
+  rescans on path change, and toggles a HKCU Run key (`StartupRegistry`) for start-with-Windows.
+
 ### Background-I/O priority
 `THREAD_MODE_BACKGROUND_BEGIN` + `ThreadPriority.Lowest` + `FILE_FLAG_SEQUENTIAL_SCAN` so our reads
 yield to MSFS's own foreground I/O. RAM-budget capped to avoid evicting pages MSFS needs.
@@ -133,13 +148,15 @@ linking fragile. Not pursued.
 - [ ] **Departure airport warm at sim start** — smooth first taxi/takeoff.
 - [ ] **SimBrief integration** (alt E) — `SimBriefUserId` in settings; fetch latest OFP at launch,
       warm departure + destination + alternate immediately. Reuses PackageIndex + Prefetcher.
-- [ ] **Settings panel / GUI** — replace/augment `preloader.ini` with a UI: SimBrief ID field,
-      OuterRadius, RAM budget, package path, enable toggles. (SimBrief ID is the first driver.)
+- [x] **Settings panel / GUI** — done in v1.2 (WinForms). SimBrief ID field still to add when alt E
+      lands; everything else (radius, poll, RAM, paths, start-with-Windows, verbose) is editable.
 - [ ] **Adaptive OuterRadius** — scale trigger distance by package size ÷ measured HDD read speed so
       warming always finishes before 25 NM.
-- [ ] **Drop monotonic RAM budget** — rely on OS LRU eviction; cap per-airport, not per-session, so a
-      late diversion airport isn't permanently skipped. (Residual from the closest-first change.)
+- [x] **Drop monotonic RAM budget** — done in v1.2: budget freed on `Release()` when flying away.
+      (Could still add OS-LRU awareness / per-airport cap later.)
 - [ ] **Force-warm on close** — at an inner radius (~25 NM) warm the destination even if budget hit.
+- [ ] **RAM budget live-apply** — currently needs restart (set in `Prefetcher` ctor); make mutable.
+- [ ] **Persist window size/position + column widths.**
 - [ ] **Re-warm on eviction** — detect if pages likely evicted (time/other-activity) and re-read.
 - [ ] **Portable logic core** — extract parse/geo/queue behind `#ifdef`/interface so it compiles &
       unit-tests off-Windows.
