@@ -35,7 +35,7 @@ namespace MsfsAirportPreloader
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             Width = 560;
-            Height = 360;
+            Height = 430;
 
             int y = 16;
             AddField("Outer radius (NM) — start warming within this distance:", _outerRadius, ref y);
@@ -55,11 +55,29 @@ namespace MsfsAirportPreloader
             _verbose.Top = y;
             _verbose.Width = 200;
             Controls.Add(_verbose);
-            y += 40;
 
-            var okButton = new Button { Text = "Save", DialogResult = DialogResult.OK, Width = 90, Top = y, Left = 350 };
+            // Pin the buttons to the bottom-right of the client area so they're always visible
+            // regardless of how many fields accumulate above.
+            int buttonTop = ClientSize.Height - 40;
+            var okButton = new Button
+            {
+                Text = "Save",
+                DialogResult = DialogResult.OK,
+                Width = 90,
+                Top = buttonTop,
+                Left = ClientSize.Width - 196,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            };
             okButton.Click += (_, __) => Apply();
-            var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 90, Top = y, Left = 450 };
+            var cancelButton = new Button
+            {
+                Text = "Cancel",
+                DialogResult = DialogResult.Cancel,
+                Width = 90,
+                Top = buttonTop,
+                Left = ClientSize.Width - 100,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            };
             Controls.Add(okButton);
             Controls.Add(cancelButton);
             AcceptButton = okButton;
