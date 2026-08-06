@@ -60,6 +60,18 @@ Chose bundled OurAirports `airports.csv` for ICAO→lat/lon. Reasoning:
 Must exceed sim's ~25 NM load radius so files are warm in time. Configurable. May need raising on
 very slow HDDs / large (2 GB+) airports so warming finishes before 25 NM.
 
+### Closest-first priority queue (implemented v1.1)
+Pending packages warmed in ascending **live** distance order, refreshed every position poll
+(`Prefetcher.Observe(entry, distanceNm)` → worker `TakeClosest()`). Rationale: answers "what if an
+airport is skipped for RAM but I get closer and land there?" — the closest airport (your destination
+as you approach) always warms before farther enroute airports, so it can't be starved by them. Budget
+is therefore spent nearest-first; when the cap is hit, the airports skipped are the *farthest*, which
+is the correct thing to drop. Dedupe/"warm once per session" moved into the Prefetcher (`_done` set).
+
+Residual: the RAM budget is still **monotonic** (never released). Not a problem in practice now that
+spend is nearest-first, but a skipped (far) airport stays marked done and won't retry even if you
+later divert to it. Full fix = drop the session counter + rely on OS LRU eviction (alt 2, backlog).
+
 ### Background-I/O priority
 `THREAD_MODE_BACKGROUND_BEGIN` + `ThreadPriority.Lowest` + `FILE_FLAG_SEQUENTIAL_SCAN` so our reads
 yield to MSFS's own foreground I/O. RAM-budget capped to avoid evicting pages MSFS needs.
@@ -125,6 +137,9 @@ linking fragile. Not pursued.
       OuterRadius, RAM budget, package path, enable toggles. (SimBrief ID is the first driver.)
 - [ ] **Adaptive OuterRadius** — scale trigger distance by package size ÷ measured HDD read speed so
       warming always finishes before 25 NM.
+- [ ] **Drop monotonic RAM budget** — rely on OS LRU eviction; cap per-airport, not per-session, so a
+      late diversion airport isn't permanently skipped. (Residual from the closest-first change.)
+- [ ] **Force-warm on close** — at an inner radius (~25 NM) warm the destination even if budget hit.
 - [ ] **Re-warm on eviction** — detect if pages likely evicted (time/other-activity) and re-read.
 - [ ] **Portable logic core** — extract parse/geo/queue behind `#ifdef`/interface so it compiles &
       unit-tests off-Windows.

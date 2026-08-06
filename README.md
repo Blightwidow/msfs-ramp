@@ -30,7 +30,10 @@ or corrupt the sim.
 SimConnect (aircraft lat/lon, 1 Hz)
       │
       ▼
-distance to every indexed airport ── within OuterRadius (default 60 NM)? ──► queue its package files
+distance to every indexed airport ── within OuterRadius (default 60 NM)? ──► observe(package, distance)
+      │
+      ▼
+priority queue, sorted by live distance ──► closest airport first
       │
       ▼
 background low-priority I/O thread ──► sequential read each file ──► warm OS page cache
@@ -38,7 +41,9 @@ background low-priority I/O thread ──► sequential read each file ──►
 ```
 
 Prefetch fires at 60 NM so files are warm before MSFS's 25 NM load. Each package is warmed once per
-session.
+session. Pending packages are warmed **closest-first** — distances refresh every poll, so the airport
+you're actually approaching (your destination) always wins over farther enroute airports and can't be
+starved by them when RAM is tight.
 
 ## Build
 
@@ -112,8 +117,8 @@ scans your Community + Official scenery packages once, then watches your positio
 [12:00:04] Indexed 42 scenery packages across 39 airports.
 [12:00:04] Waiting for MSFS... (start a flight; Ctrl+C to quit)
 [12:07:31] SimConnect connected to: KittyHawk
-[12:41:10] [approach] LFPG within 60 NM — queueing "flytampa-airport-lfpg" (1830 MB).
-[12:41:12] [prefetch] LFPG "flytampa-airport-lfpg": warmed 214 files, 1830 MB (session total 1830 MB)
+[12:41:10] [queue] LFPG "flytampa-airport-lfpg" at 58 NM (1830 MB) — 1 pending.
+[12:41:12] [prefetch] LFPG "flytampa-airport-lfpg" (57 NM): warmed 214 files, 1830 MB (session total 1830 MB)
 ```
 
 By the time you reach 25 NM the files are in RAM — no freeze.

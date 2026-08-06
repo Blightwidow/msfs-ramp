@@ -53,26 +53,22 @@ namespace MsfsAirportPreloader
 
             using var prefetcher = new Prefetcher(config.RamBudgetMegabytes, Log);
 
-            // --- Position -> distance -> enqueue ---
+            // --- Position -> distance -> observe (closest warms first) ---
             double outerRadius = config.OuterRadiusNauticalMiles;
-            var evaluated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             void OnPosition(AircraftPosition position)
             {
-                foreach (string icao in NearbyIndexedAirports(position, packageIndex, airportDatabase, outerRadius))
+                // Report every in-range airport with its current distance. Prefetcher keeps the
+                // closest one at the head of the queue and refreshes distances as we move, so the
+                // airport we're actually approaching always wins over farther enroute ones.
+                foreach ((string icao, double distanceNauticalMiles) in
+                         NearbyIndexedAirports(position, packageIndex, airportDatabase, outerRadius))
                 {
-                    if (!evaluated.Add(icao))
-                    {
-                        continue; // already queued this session
-                    }
-
                     if (packageIndex.TryGet(icao, out List<PackageEntry> entries))
                     {
                         foreach (PackageEntry entry in entries)
                         {
-                            Log($"[approach] {icao} within {outerRadius:0} NM — queueing \"{entry.PackageName}\" " +
-                                $"({entry.TotalBytes / (1024 * 1024)} MB).");
-                            prefetcher.Enqueue(entry);
+                            prefetcher.Observe(entry, distanceNauticalMiles);
                         }
                     }
                 }
@@ -104,7 +100,7 @@ namespace MsfsAirportPreloader
             Log("Shutting down.");
         }
 
-        private static IEnumerable<string> NearbyIndexedAirports(
+        private static IEnumerable<(string Icao, double DistanceNauticalMiles)> NearbyIndexedAirports(
             AircraftPosition position,
             PackageIndex packageIndex,
             AirportDatabase airportDatabase,
@@ -123,7 +119,7 @@ namespace MsfsAirportPreloader
 
                 if (distance <= radiusNauticalMiles)
                 {
-                    yield return icao;
+                    yield return (icao, distance);
                 }
             }
         }
