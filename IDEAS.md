@@ -116,10 +116,6 @@ agreement (distance BGL↔CSV, expect <1 NM), mismatches/misses. High coverage +
 switch to BGL; else keep CSV. Zero risk (read-only, CSV stays the source of truth during the probe).
 Crib record offsets/encoding from Little Navmap rather than reverse-engineering from scratch.
 
-### B. SimConnect as coordinate lookup only
-Query sim once at startup for indexed ICAOs' coords (not for proximity). Removes CSV, sim = source of
-truth. Cost: needs sim running before indexing; inherits facility-API flakiness.
-
 ### E. SimBrief integration — pre-fetch flight endpoints at launch
 Pull the user's latest OFP from the free SimBrief API and warm the **departure + destination**
 (and **alternate**) airports at startup, before the flight even begins — independent of aircraft
