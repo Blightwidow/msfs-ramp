@@ -26,8 +26,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Native SimConnect.dll copied to output so the managed wrapper can P/Invoke it. -->
+    <!-- Native SimConnect.dll copied NEXT TO the exe (Link flattens the lib\ subpath)
+         so the managed wrapper can P/Invoke it. Without Link it lands in bin\...\lib\. -->
     <None Include="lib\SimConnect.dll" Condition="Exists('lib\SimConnect.dll')">
+      <Link>SimConnect.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="airports.csv" Condition="Exists('airports.csv')">
