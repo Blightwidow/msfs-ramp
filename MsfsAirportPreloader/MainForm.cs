@@ -78,11 +78,13 @@ namespace MsfsAirportPreloader
             _split.Panel1.Controls.Add(_airportList);
             _split.Panel2.Controls.Add(_logBox);
 
-            // Add Top/Bottom docked controls first, Fill control last, so it takes the
-            // remaining space instead of overlapping the toolbar/status bar.
-            Controls.Add(toolbar);
-            Controls.Add(_statusLabel);
+            // Dock layout is applied in reverse z-order, so the Fill control must be added
+            // FIRST (lowest z-order) to receive the space remaining after the Top/Bottom edge
+            // controls reserve theirs. Adding it last makes it cover the whole client, hiding
+            // the list's first rows behind the toolbar.
             Controls.Add(_split);
+            Controls.Add(_statusLabel);
+            Controls.Add(toolbar);
         }
 
         protected override void OnLoad(EventArgs e)
