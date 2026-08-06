@@ -44,6 +44,7 @@ namespace MsfsAirportPreloader
         }
 
         public bool IsSimConnected => _simConnect?.IsConnected ?? false;
+        public bool IsSimRunning => _simConnect?.IsSimRunning ?? false;
         public int IndexedAirportCount { get; private set; }
         public int IndexedPackageCount { get; private set; }
         public bool Ready { get; private set; }
@@ -163,7 +164,9 @@ namespace MsfsAirportPreloader
 
         private void OnPosition(AircraftPosition position)
         {
-            if (!Ready)
+            // Don't warm during the loading screen / menus — it would compete with the sim's own
+            // disk reads and slow the load. Only act once the sim reports it's in a flight.
+            if (!Ready || !(_simConnect?.IsSimRunning ?? false))
             {
                 return;
             }

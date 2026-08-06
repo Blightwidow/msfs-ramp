@@ -157,12 +157,16 @@ namespace MsfsAirportPreloader
             _airportList.EndUpdate();
 
             _statusLabel.Text = BuildStatusText(states.Count);
-            _statusLabel.ForeColor = _engine.IsSimConnected ? Color.Green : Color.DimGray;
+            _statusLabel.ForeColor = _engine.IsSimRunning
+                ? Color.Green
+                : _engine.IsSimConnected ? Color.DarkOrange : Color.DimGray;
         }
 
         private string BuildStatusText(int trackedCount)
         {
-            string sim = _engine.IsSimConnected ? "MSFS connected" : "Waiting for MSFS";
+            string sim = !_engine.IsSimConnected
+                ? "Waiting for MSFS"
+                : _engine.IsSimRunning ? "In flight (warming active)" : "MSFS connected (menu/loading — paused)";
             string index = _engine.Ready
                 ? $"{_engine.IndexedPackageCount} packages / {_engine.IndexedAirportCount} airports indexed"
                 : "indexing...";

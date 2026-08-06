@@ -49,6 +49,9 @@ returns to *Unloaded* in the list), so a long flight never exhausts the budget.
 The app is a **WinForms tray application**: it keeps running in the background even with MSFS closed,
 and connects/reconnects automatically each time the sim starts.
 
+Warming only runs once the sim reports it's **in a flight** (SimConnect `"Sim"` state) — never during
+the loading screen or menus, so it never competes with MSFS's own load for the disk.
+
 ## Build
 
 > **Windows only.** SimConnect and the page-cache warming calls are Windows APIs; there is no

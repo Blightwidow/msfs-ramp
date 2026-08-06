@@ -30,7 +30,8 @@ namespace MsfsAirportPreloader
         private const int WM_USER_SIMCONNECT = 0x0402;
 
         private enum Definition { AircraftState }
-        private enum Request { AircraftState }
+        private enum Request { AircraftState, SimState }
+        private enum SystemEvent { Sim }
 
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         private struct AircraftStateStruct
@@ -47,11 +48,15 @@ namespace MsfsAirportPreloader
         private Thread _pumpThread;
         private volatile bool _connected;
         private volatile bool _pumpRunning;
+        private volatile bool _simRunning;
 
         public event Action<AircraftPosition> PositionUpdated;
         public event Action<bool> ConnectionChanged;
 
         public bool IsConnected => _connected;
+
+        /// <summary>True only when the sim is in an actual flight (not menus/loading screen).</summary>
+        public bool IsSimRunning => _simRunning;
 
         public SimConnectClient(Action<string> log) => _log = log;
 
@@ -74,6 +79,8 @@ namespace MsfsAirportPreloader
                     _simConnect.OnRecvQuit += OnRecvQuit;
                     _simConnect.OnRecvException += OnRecvException;
                     _simConnect.OnRecvSimobjectData += OnRecvSimobjectData;
+                    _simConnect.OnRecvEvent += OnRecvEvent;
+                    _simConnect.OnRecvSystemState += OnRecvSystemState;
 
                     _simConnect.AddToDataDefinition(Definition.AircraftState, "PLANE LATITUDE", "degrees",
                         SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SimConnect.SIMCONNECT_UNUSED);
@@ -109,6 +116,38 @@ namespace MsfsAirportPreloader
                 SIMCONNECT_PERIOD.SECOND,
                 SIMCONNECT_DATA_REQUEST_FLAG.CHANGED,
                 0, 0, 0);
+
+            // Gate warming on the sim actually being in a flight: the "Sim" event/state is 1 while
+            // flying and 0 in menus/loading, so we never fight the loading screen for the disk.
+            _simConnect.SubscribeToSystemEvent(SystemEvent.Sim, "Sim");
+            _simConnect.RequestSystemState(Request.SimState, "Sim"); // seed the initial value
+        }
+
+        private void OnRecvEvent(SimConnect sender, SIMCONNECT_RECV_EVENT data)
+        {
+            if (data.uEventID == (uint)SystemEvent.Sim)
+            {
+                SetSimRunning(data.dwData != 0);
+            }
+        }
+
+        private void OnRecvSystemState(SimConnect sender, SIMCONNECT_RECV_SYSTEM_STATE data)
+        {
+            if (data.dwRequestID == (uint)Request.SimState)
+            {
+                SetSimRunning(data.dwInteger != 0);
+            }
+        }
+
+        private void SetSimRunning(bool running)
+        {
+            if (_simRunning == running)
+            {
+                return;
+            }
+
+            _simRunning = running;
+            _log?.Invoke(running ? "Sim running — warming enabled." : "Sim in menu/loading — warming paused.");
         }
 
         private void OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)
@@ -173,6 +212,7 @@ namespace MsfsAirportPreloader
         {
             bool wasConnected = _connected;
             _connected = false;
+            _simRunning = false;
             _pumpRunning = false;
 
             if (_pumpThread != null && _pumpThread != Thread.CurrentThread)

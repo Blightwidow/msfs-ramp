@@ -87,6 +87,13 @@ Turned the console app into a WinForms tray application (`Engine` orchestrator +
 - **Settings panel** edits all ini keys, writes back via `Config.Save`, applies live (radius/poll),
   rescans on path change, and toggles a HKCU Run key (`StartupRegistry`) for start-with-Windows.
 
+### Gate warming on sim-running state (implemented v1.3)
+Observed prefetch firing during the **loading screen**, competing with the sim's own disk reads and
+slowing the load. Fix: subscribe to the SimConnect `"Sim"` system event (1 = in flight, 0 =
+menu/loading) + seed via `RequestSystemState("Sim")`. `Engine.OnPosition` now no-ops unless
+`IsSimRunning`. Background-I/O priority alone wasn't enough — a full stop during load is what the user
+wants. Also pauses warming when returning to menus; UI status shows In flight / menu-loading / waiting.
+
 ### Background-I/O priority
 `THREAD_MODE_BACKGROUND_BEGIN` + `ThreadPriority.Lowest` + `FILE_FLAG_SEQUENTIAL_SCAN` so our reads
 yield to MSFS's own foreground I/O. RAM-budget capped to avoid evicting pages MSFS needs.
