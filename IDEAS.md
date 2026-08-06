@@ -95,8 +95,26 @@ yield to MSFS's own foreground I/O. RAM-budget capped to avoid evicting pages MS
 
 ### A. BGL-derived coordinates (drop the CSV)  — strongest future candidate
 Read each airport's reference lat/lon from the airport BGL header inside the package. Self-contained,
-always matches installed content, no stale external file. Cost: BGL binary parsing.
+always matches installed content, no stale external file. Also yields the **authoritative ICAO**
+(fixes the folder-name-guess heuristic). Cost: BGL binary parsing.
 → Good long-term replacement for the CSV.
+
+**Confidence: NOT yet verified — do not replace CSV until proven.**
+- Confident: an *airport-definition* BGL carries an airport reference point (lat/lon/alt) in its
+  airport-record header. Well-documented in legacy FSX/P3D; MSFS airports compile XML→BGL keeping it.
+  Little Navmap (open-source, albar965) parses MSFS 2020/2024 airport BGLs — proof it's doable and a
+  reference for the exact record layout + fixed-point coord encoding.
+- Uncertain: (1) NOT every BGL is an airport BGL — most are object/model/terrain/exclusion BGLs with
+  no reference point; must find the airport record, not any BGL. (2) MSFS record layout/encoding may
+  differ from legacy; public docs thin. (3) fixed-point coord decode is easy to get subtly wrong
+  (scale/sign/projection).
+
+**Verification probe (build BEFORE committing to alt A):** the CSV is the oracle. One-shot scan:
+parse airport records in each installed package's BGLs, extract coord + ICAO, compare to OurAirports
+CSV for the same ICAO. Report: coverage (% indexed airports where an airport record was found),
+agreement (distance BGL↔CSV, expect <1 NM), mismatches/misses. High coverage + tight agreement →
+switch to BGL; else keep CSV. Zero risk (read-only, CSV stays the source of truth during the probe).
+Crib record offsets/encoding from Little Navmap rather than reverse-engineering from scratch.
 
 ### B. SimConnect as coordinate lookup only
 Query sim once at startup for indexed ICAOs' coords (not for proximity). Removes CSV, sim = source of
@@ -141,7 +159,9 @@ linking fragile. Not pursued.
 
 - [ ] **Heading/ETA filtering** — only warm airports you're flying *toward* (bearing + closing speed),
       not every airport within 60 NM. Cuts wasted I/O.
-- [ ] **BGL-derived coords** (alt A) — remove CSV dependency.
+- [ ] **BGL coord verification probe** (alt A, gate) — scan packages, compare BGL airport-record
+      coords/ICAO to CSV oracle, report coverage + agreement. Decides whether alt A is viable.
+- [ ] **BGL-derived coords** (alt A) — remove CSV dependency. ONLY after the probe passes.
 - [ ] **MSFS 2024 support** — path resolver + SDK differences.
 - [ ] **Flight-plan aware prefetch** — read active flight plan (dep/enroute/arr), warm along route.
       (Scope was deferred; v1 is approach-only.)
