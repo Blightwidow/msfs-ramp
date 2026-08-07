@@ -258,6 +258,9 @@ namespace MsfsAirportPreloader
                 if (distance > releaseRadius)
                 {
                     _prefetcher.Release(target.Entry); // free budget even for visited fields
+                    // Flown right away: the sim has unloaded it too, so if you come back it must be
+                    // re-warmed — drop the "visited" mark.
+                    _visitedThisFlight.Remove(key);
                     continue;
                 }
 
