@@ -741,6 +741,34 @@ namespace MsfsAirportPreloader
             _statusBar.Invalidate();
             _toolbar.Invalidate();
             UpdateTrayIcon(DominantStateColor());
+            UpdateTrayText();
+        }
+
+        /// <summary>Second tooltip line summarising the current state, alongside the coloured glyph.</summary>
+        private void UpdateTrayText()
+        {
+            string status;
+            if (!_engine.IsSimConnected)
+            {
+                status = "Waiting for MSFS";
+            }
+            else if (!_engine.IsSimRunning)
+            {
+                status = "Connected · in menu";
+            }
+            else
+            {
+                var parts = new List<string>(4);
+                if (_countWarming > 0) parts.Add($"{_countWarming} warming");
+                if (_countLoaded > 0) parts.Add($"{_countLoaded} loaded");
+                if (_countQueued > 0) parts.Add($"{_countQueued} queued");
+                if (_countSkipped > 0) parts.Add($"{_countSkipped} skipped");
+                status = parts.Count > 0 ? string.Join(" · ", parts) : "In flight · nothing in range";
+            }
+
+            // NotifyIcon.Text is capped at 63 chars; keep "RAMP" plus the status line within it.
+            string text = "RAMP\r\n" + status;
+            _tray.Text = text.Length > 63 ? text.Substring(0, 63) : text;
         }
 
         private void RecomputeStats(List<AirportState> states)
