@@ -60,6 +60,9 @@ namespace MsfsAirportPreloader
         public event Action<AircraftPosition> PositionUpdated;
         public event Action<bool> ConnectionChanged;
 
+        /// <summary>Fires when the in-flight state flips (true = in a flight, false = menu/loading).</summary>
+        public event Action<bool> SimRunningChanged;
+
         public bool IsConnected => _connected;
 
         /// <summary>True only when the sim is in an actual flight (not menus/loading screen).</summary>
@@ -136,6 +139,7 @@ namespace MsfsAirportPreloader
 
             _simRunning = running;
             _log?.Invoke(running ? "In flight — warming enabled." : "In menu/loading — warming paused.");
+            SimRunningChanged?.Invoke(running);
         }
 
         private void OnRecvQuit(SimConnect sender, SIMCONNECT_RECV data)

@@ -43,6 +43,11 @@ namespace MsfsAirportPreloader
 
         private volatile List<PrefetchTarget> _targets = new List<PrefetchTarget>();
 
+        // Airports the aircraft has been inside the inner radius of during this flight — the sim
+        // already has them, so don't warm them again (departure on climb-out, touch-and-go). Cleared
+        // when the flight ends. Touched only on the SimConnect callback thread.
+        private readonly HashSet<string> _visitedThisFlight = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         public Engine(Config config, string iniPath)
         {
             _config = config;
@@ -90,6 +95,13 @@ namespace MsfsAirportPreloader
             _simConnect.PositionUpdated += OnPosition;
             _simConnect.ConnectionChanged += connected =>
                 Log(connected ? "Connected to MSFS." : "Disconnected from MSFS.");
+            _simConnect.SimRunningChanged += running =>
+            {
+                if (!running)
+                {
+                    _visitedThisFlight.Clear(); // new flight re-arms warming for every airport
+                }
+            };
 
             _running = true;
             _connectionThread = new Thread(ConnectionLoop) { IsBackground = true, Name = "EngineConnect" };
@@ -233,22 +245,28 @@ namespace MsfsAirportPreloader
                 double distance = Geo.DistanceNauticalMiles(
                     position.Latitude, position.Longitude, target.Latitude, target.Longitude);
 
+                string key = target.Entry.Icao + "|" + target.Entry.PackageName;
+
                 if (distance < innerRadius)
                 {
-                    // Too close — the sim has already streamed this airport (e.g. you spawned here);
-                    // don't queue a pointless re-read. Anything we already warmed stays warm.
+                    // Too close — the sim has already streamed this airport (e.g. you spawned here).
+                    // Remember it for the rest of the flight so we don't re-warm on climb-out.
+                    _visitedThisFlight.Add(key);
                     continue;
                 }
 
-                if (distance <= outerRadius)
+                if (distance > releaseRadius)
+                {
+                    _prefetcher.Release(target.Entry); // free budget even for visited fields
+                    continue;
+                }
+
+                // Between inner and release: warm only if in range AND not already visited this flight.
+                if (distance <= outerRadius && !_visitedThisFlight.Contains(key))
                 {
                     _prefetcher.Observe(target.Entry, distance);
                 }
-                else if (distance > releaseRadius)
-                {
-                    _prefetcher.Release(target.Entry);
-                }
-                // Between outer and release radius: hysteresis band, leave state untouched.
+                // Otherwise (hysteresis band, or a visited field): leave state untouched.
             }
         }
 
