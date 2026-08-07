@@ -97,6 +97,11 @@ namespace MsfsAirportPreloader
         private ToolStripMenuItem _trayPauseItem;
         private bool _balloonedThisFlight;
 
+        private Icon _appIcon;
+        private CaptionButton _minButton;
+        private CaptionButton _maxButton;
+        private CaptionButton _closeButton;
+
         public MainForm(Engine engine, string iniPath)
         {
             _engine = engine;
@@ -144,6 +149,14 @@ namespace MsfsAirportPreloader
             BackColor = Theme.Window;
             ForeColor = Theme.Text;
             Font = Theme.Sans(9f);
+
+            // Custom dark chrome: no OS title bar; the toolbar is the caption. CreateParams keeps the
+            // native resize frame + snap + shadow (see CreateParams / WndProc below).
+            FormBorderStyle = FormBorderStyle.None;
+            MaximizeBox = true;
+            MinimizeBox = true;
+            _appIcon = MakeAppIcon();
+            Icon = _appIcon;
 
             BuildToolbar();
             BuildStatsStrip();
@@ -217,7 +230,7 @@ namespace MsfsAirportPreloader
         private void BuildBanner()
         {
             _banner.Dock = DockStyle.Top;
-            _banner.Height = 58;
+            _banner.Height = 68;
             _banner.Visible = false;
             _banner.BackColor = Theme.Window;
             _banner.Paint += PaintBanner;
@@ -593,6 +606,62 @@ namespace MsfsAirportPreloader
             _toolbar.Controls.Add(log);
             _toolbar.Controls.Add(settings);
             _toolbar.Controls.Add(about);
+
+            // Caption buttons (min / max / close) on the right — the toolbar is the title bar.
+            _minButton = new CaptionButton(CaptionButton.Glyph.Minimize);
+            _minButton.Click += (_, __) => WindowState = FormWindowState.Minimized;
+            _maxButton = new CaptionButton(CaptionButton.Glyph.Maximize);
+            _maxButton.Click += (_, __) => ToggleMaximize();
+            _closeButton = new CaptionButton(CaptionButton.Glyph.Close);
+            _closeButton.Click += (_, __) => Close();
+            _toolbar.Controls.Add(_minButton);
+            _toolbar.Controls.Add(_maxButton);
+            _toolbar.Controls.Add(_closeButton);
+            LayoutCaptionButtons();
+
+            // Drag / double-click-maximize from the empty toolbar area (child controls are exempt).
+            _toolbar.Resize += (_, __) => LayoutCaptionButtons();
+            _toolbar.MouseDown += (_, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    ReleaseCapture();
+                    SendMessage(Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+                }
+            };
+            _toolbar.MouseDoubleClick += (_, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    ToggleMaximize();
+                }
+            };
+        }
+
+        private const int CaptionButtonWidth = 46;
+
+        private void LayoutCaptionButtons()
+        {
+            if (_closeButton == null)
+            {
+                return;
+            }
+
+            int h = _toolbar.Height - 1; // sit above the bottom hairline
+            _closeButton.SetBounds(_toolbar.Width - CaptionButtonWidth, 0, CaptionButtonWidth, h);
+            _maxButton.SetBounds(_toolbar.Width - CaptionButtonWidth * 2, 0, CaptionButtonWidth, h);
+            _minButton.SetBounds(_toolbar.Width - CaptionButtonWidth * 3, 0, CaptionButtonWidth, h);
+        }
+
+        private void ToggleMaximize()
+        {
+            WindowState = WindowState == FormWindowState.Maximized
+                ? FormWindowState.Normal
+                : FormWindowState.Maximized;
+            _maxButton.Kind = WindowState == FormWindowState.Maximized
+                ? CaptionButton.Glyph.Restore
+                : CaptionButton.Glyph.Maximize;
+            _maxButton.Invalidate();
         }
 
         private RoundedButton MakeToolButton(string text, ref int left)
@@ -631,9 +700,9 @@ namespace MsfsAirportPreloader
             TextRenderer.DrawText(g, "RAMP", Theme.Mono(9.5f, FontStyle.Bold),
                 new Point(44, 15), Theme.Text, TextFormatFlags.NoPadding);
 
-            // Right side: connection dot + status, then flight state.
+            // Right side: connection dot + status, then flight state — kept clear of the caption buttons.
             (Color dotColor, string status, Color statusColor, string flight) = ConnectionStatus();
-            int right = _toolbar.Width - 16;
+            int right = _toolbar.Width - CaptionButtonWidth * 3 - 16;
 
             Font flightFont = Theme.Mono(8.5f);
             Size flightSize = TextRenderer.MeasureText(flight, flightFont);
@@ -1180,6 +1249,95 @@ namespace MsfsAirportPreloader
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool DestroyIcon(IntPtr handle);
 
+        // --- Custom window chrome (borderless, but keep native resize / snap / shadow) -----
+
+        private const int WsMinimizeBox = 0x00020000;
+        private const int WsMaximizeBox = 0x00010000;
+        private const int WsThickFrame = 0x00040000;
+        private const int WsCaption = 0x00C00000;
+        private const int WmNcCalcSize = 0x0083;
+        private const int WmNcLButtonDown = 0x00A1;
+        private const int HtCaption = 0x0002;
+        private const int WM_NCLBUTTONDOWN = WmNcLButtonDown;
+        private const int HTCAPTION = HtCaption;
+
+        [DllImport("user32.dll")]
+        private static extern bool ReleaseCapture();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr DefWindowProc(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Rect { public int Left, Top, Right, Bottom; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NcCalcSizeParams { public Rect Client, Prev, Source; public IntPtr WindowPos; }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                // Add the resize frame + caption so DWM gives us snap, shadow and native resize;
+                // WM_NCCALCSIZE below reclaims the caption strip as client so no OS title shows.
+                cp.Style |= WsMinimizeBox | WsMaximizeBox | WsThickFrame | WsCaption;
+                return cp;
+            }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WmNcCalcSize && m.WParam != IntPtr.Zero)
+            {
+                // Let the default compute the standard non-client insets (keeps side/bottom resize
+                // borders), then pull the client's top back up over the caption we don't want.
+                IntPtr result = DefWindowProc(m.HWnd, m.Msg, m.WParam, m.LParam);
+                var p = (NcCalcSizeParams)Marshal.PtrToStructure(m.LParam, typeof(NcCalcSizeParams));
+                p.Client.Top -= SystemInformation.CaptionHeight;
+                Marshal.StructureToPtr(p, m.LParam, false);
+                m.Result = result;
+                return;
+            }
+
+            base.WndProc(ref m);
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            // Keep the maximise/restore glyph in sync with snap / drag-to-top.
+            if (_maxButton != null)
+            {
+                _maxButton.Kind = WindowState == FormWindowState.Maximized
+                    ? CaptionButton.Glyph.Restore
+                    : CaptionButton.Glyph.Maximize;
+                _maxButton.Invalidate();
+            }
+        }
+
+        private static Icon MakeAppIcon()
+        {
+            using var bitmap = new Bitmap(32, 32);
+            using (Graphics g = Graphics.FromImage(bitmap))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                Theme.DrawLogo(g, new RectangleF(1, 1, 30, 30), Theme.Raised, Theme.Accent, Theme.Border);
+            }
+
+            IntPtr handle = bitmap.GetHicon();
+            try
+            {
+                return (Icon)Icon.FromHandle(handle).Clone(); // Clone owns its own handle
+            }
+            finally
+            {
+                DestroyIcon(handle);
+            }
+        }
+
         private void RestoreFromTray()
         {
             Show();
@@ -1431,6 +1589,8 @@ namespace MsfsAirportPreloader
                 _trayIcon.Dispose();
                 DestroyIcon(handle);
             }
+
+            _appIcon?.Dispose();
 
             base.OnFormClosed(e);
         }

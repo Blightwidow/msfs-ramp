@@ -23,7 +23,7 @@ namespace MsfsAirportPreloader
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(430, 384);
+            ClientSize = new Size(430, 410);
             BackColor = Theme.Window;
             ForeColor = Theme.Text;
             Font = Theme.Sans(9f);
@@ -83,18 +83,18 @@ namespace MsfsAirportPreloader
                 Left = left,
                 Top = 202,
                 Width = width,
-                Height = 34,
+                Height = 56,
                 Font = Theme.Sans(9f),
                 ForeColor = Theme.TextMuted,
                 Text = "Airport coordinates come from OurAirports, generously released into the " +
                        "public domain. Huge thanks to its contributors — RAMP wouldn't work without it.",
             });
-            AddLink(left, 244, width, OurAirportsUrl);
+            AddLink(left, 262, width, OurAirportsUrl);
 
             Controls.Add(new Label
             {
                 Left = left,
-                Top = 296,
+                Top = 320,
                 Width = width,
                 Height = 16,
                 Font = Theme.Mono(8f),

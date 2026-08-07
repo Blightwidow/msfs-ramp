@@ -63,6 +63,68 @@ namespace MsfsAirportPreloader
         }
     }
 
+    /// <summary>A window caption button (minimise / maximise / restore / close) for the custom chrome.</summary>
+    internal sealed class CaptionButton : Control
+    {
+        public enum Glyph { Minimize, Maximize, Restore, Close }
+
+        private bool _hover;
+
+        public CaptionButton(Glyph kind)
+        {
+            Kind = kind;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer, true);
+            TabStop = false;
+        }
+
+        public Glyph Kind { get; set; }
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            Color back = Theme.Raised;
+            if (_hover)
+            {
+                back = Kind == Glyph.Close ? Color.FromArgb(0xE8, 0x11, 0x23) : Theme.Border;
+            }
+
+            using (var brush = new SolidBrush(back))
+            {
+                g.FillRectangle(brush, ClientRectangle);
+            }
+
+            Color ink = _hover && Kind == Glyph.Close ? Color.White : Theme.TextMuted;
+            g.SmoothingMode = SmoothingMode.HighQuality;
+            float cx = Width / 2f, cy = Height / 2f;
+            using var pen = new Pen(ink, 1.2f);
+
+            switch (Kind)
+            {
+                case Glyph.Minimize:
+                    g.DrawLine(pen, cx - 5, cy, cx + 5, cy);
+                    break;
+                case Glyph.Maximize:
+                    g.DrawRectangle(pen, cx - 5, cy - 5, 10, 10);
+                    break;
+                case Glyph.Restore:
+                    g.DrawRectangle(pen, cx - 5, cy - 3, 8, 8);
+                    g.DrawLine(pen, cx - 3, cy - 3, cx - 3, cy - 5);
+                    g.DrawLine(pen, cx - 3, cy - 5, cx + 5, cy - 5);
+                    g.DrawLine(pen, cx + 5, cy - 5, cx + 5, cy + 3);
+                    g.DrawLine(pen, cx + 5, cy + 3, cx + 3, cy + 3);
+                    break;
+                case Glyph.Close:
+                    g.DrawLine(pen, cx - 5, cy - 5, cx + 5, cy + 5);
+                    g.DrawLine(pen, cx + 5, cy - 5, cx - 5, cy + 5);
+                    break;
+            }
+        }
+    }
+
     /// <summary>Dark colour table for the tray context menu.</summary>
     internal sealed class DarkMenuColors : System.Windows.Forms.ProfessionalColorTable
     {

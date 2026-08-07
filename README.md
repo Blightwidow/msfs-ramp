@@ -53,8 +53,8 @@ returns to *Unloaded* in the list), so a long flight never exhausts the budget.
 The app is a **WinForms tray application**: it keeps running in the background even with MSFS closed,
 and connects/reconnects automatically each time the sim starts.
 
-Warming only runs once the sim reports it's **in a flight** (SimConnect `"Sim"` state) — never during
-the loading screen or menus, so it never competes with MSFS's own load for the disk.
+Warming only runs once the sim reports you're **in a flight** (SimConnect `CAMERA STATE`) — never
+during the loading screen or menus, so it never competes with MSFS's own load for the disk.
 
 ## Build
 
@@ -114,48 +114,14 @@ Output: `bin/Release/net48/RAMP.exe`. `SimConnect.dll`, `airports.csv`, and
 | `BadImageFormatException` at startup | Architecture mismatch — build **x64** (managed + native SimConnect are 64-bit). |
 | Runtime: `no airports loaded from ...airports.csv` | Step 2 not done, or wrong header. Use the OurAirports file unmodified. |
 
-## Run
+## Using it
 
-Launch `RAMP.exe` — it can run with MSFS open or closed. On first start it loads the
-airport database and scans your `Community` + `Official` scenery packages once (auto-detecting
-`InstalledPackagesPath` from `UserCfg.opt`, Store/Game Pass and Steam layouts). Then it waits for MSFS
-and connects automatically; start a flight and it tracks your position.
+Launch `RAMP.exe` (with MSFS open or closed). It scans your scenery packages once, then waits for the
+sim and warms the airports you approach. Closing the window hides it to the tray; it keeps running.
 
-### Window
-
-- **Airport list** — every airport package you've flown near, with live status:
-  | Status | Meaning |
-  |--------|---------|
-  | `Unloaded` | out of range (or flown far enough away that it was released) |
-  | `Queued` | in range, waiting for the warming thread |
-  | `Loading...` | being read into the page cache now |
-  | `Loaded` | warm — files resident in RAM, ready for MSFS's 25 NM load |
-  | `Skipped` | in range but RAM budget was full |
-- **Log pane** — connection + queue/prefetch/unload events.
-- **Status bar** — MSFS connection state, index counts, airports tracked.
-- **Settings** button — edit everything (below) without touching the .ini by hand.
-
-### Background / tray
-
-Closing the window (the **X**) minimizes to the system tray — the engine keeps running so it stays
-connected across sim restarts. Right-click the tray icon for **Open / Settings / Exit** (Exit is the
-only real quit). Enable **Start with Windows** in Settings to launch it at login and forget about it.
-
-## Configuration — `preloader.ini`
-
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `OuterRadiusNauticalMiles` | 60 | Distance at which warming starts. **Enforced minimum 30 NM** (MSFS loads scenery ~25 NM, so warming must start before that). Raise it if warming doesn't finish in time on a very slow HDD. |
-| `PollSeconds` | 2 | Position re-check interval. |
-| `RamBudgetMegabytes` | 4096 | Cap on bytes held in cache at once (freed as airports leave range). Keep below (free RAM − MSFS's needs). Change applies after restart. |
-| `InstalledPackagesPath` | *(auto)* | Force the MSFS package folder if auto-detect fails. |
-| `AirportsCsvPath` | *(beside exe)* | Alternate airports.csv location. |
-| `StartWithWindows` | false | Launch the app at Windows login (HKCU Run key). |
-| `Verbose` | true | Log every queue/prefetch line. |
-
-All of these are editable in the **Settings** panel; it writes them back to `preloader.ini`. Radius
-and poll interval apply live; changing the package/CSV paths triggers a rescan; RAM budget applies on
-next restart.
+**→ See [docs/USAGE.md](docs/USAGE.md)** for the full walkthrough: the window, the seven states, the
+settings, and the tray. Settings live in `preloader.ini` next to the exe and are managed entirely by
+the in-app Settings panel — no hand-editing needed.
 
 ## Limitations / notes
 
@@ -172,16 +138,21 @@ next restart.
 ```
 MsfsAirportPreloader/
   Program.cs               WinForms entry point
-  MainForm.cs              tray window: airport list + log + status
+  MainForm.cs              main window: custom chrome, states, airport list, tray
   SettingsForm.cs          editable settings dialog
+  AboutForm.cs             About popup (credits + links)
+  Theme.cs                 palette (light/dark), fonts, paint primitives
+  ThemedControls.cs        toggle, slider, rounded/caption buttons, dark menu renderer
   Engine.cs                orchestrates everything on background threads
-  SimConnectClient.cs      SimConnect connection w/ auto-reconnect, position at 1 Hz
+  SimConnectClient.cs      SimConnect connection w/ auto-reconnect, position + camera at 1 Hz
   PackagePathResolver.cs   find InstalledPackagesPath from UserCfg.opt
   PackageIndex.cs          scan packages, map ICAO → on-disk files (via layout.json)
   AirportDatabase.cs       OurAirports CSV → ICAO coordinates
   Prefetcher.cs            closest-first page-cache warmer w/ load/unload state machine
-  AirportState.cs          per-airport status model (Unloaded/Queued/Loading/Loaded/Skipped)
+  AirportState.cs          per-airport status model (Unloaded/Queued/Warming/Loaded/Skipped)
   StartupRegistry.cs       "start with Windows" registry entry
   Geo.cs                   haversine distance
   Config.cs                preloader.ini load/save
 ```
+
+See also [docs/USAGE.md](docs/USAGE.md) and the design brief / ideas in [docs/](docs/).
