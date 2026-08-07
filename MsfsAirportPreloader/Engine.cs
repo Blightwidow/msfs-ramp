@@ -48,6 +48,11 @@ namespace MsfsAirportPreloader
         // when the flight ends. Touched only on the SimConnect callback thread.
         private readonly HashSet<string> _visitedThisFlight = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // UTC ticks of the last position poll that actually swept the airport list (i.e. passed the
+        // in-flight gate). Written on the SimConnect callback thread, read by the UI — via long so
+        // the read/write is atomic. Zero = no sweep yet.
+        private long _lastSweepTicks;
+
         public Engine(Config config, string iniPath)
         {
             _config = config;
@@ -56,6 +61,17 @@ namespace MsfsAirportPreloader
 
         public bool IsSimConnected => _simConnect?.IsConnected ?? false;
         public bool IsSimRunning => _simConnect?.IsSimRunning ?? false;
+
+        /// <summary>When the last position poll actually swept the airport list (UTC), or null if
+        /// none has run yet this session. Drives the footer's "last sweep" readout.</summary>
+        public DateTime? LastSweepUtc
+        {
+            get
+            {
+                long ticks = Interlocked.Read(ref _lastSweepTicks);
+                return ticks == 0 ? (DateTime?)null : new DateTime(ticks, DateTimeKind.Utc);
+            }
+        }
         public int IndexedAirportCount { get; private set; }
         public int IndexedPackageCount { get; private set; }
 
@@ -229,6 +245,8 @@ namespace MsfsAirportPreloader
             {
                 return;
             }
+
+            Interlocked.Exchange(ref _lastSweepTicks, DateTime.UtcNow.Ticks);
 
             double outerRadius, innerRadius;
             lock (_configGate)
