@@ -121,7 +121,20 @@ namespace MsfsAirportPreloader
             AddSection("PATHS", left, ref y);
             AddFieldLabel("MSFS package folder", left, y, fullWidth);
             AddPathInput(_packagesPath, left, y + 18, fullWidth, browseFolder: true);
-            y += 58;
+            bool indexed = _engine.Ready;
+            Controls.Add(new Label
+            {
+                Left = left,
+                Top = y + 56,
+                Width = fullWidth,
+                Height = 16,
+                Font = Theme.Sans(8.5f),
+                ForeColor = indexed ? Theme.Loaded : Theme.TextDim,
+                Text = indexed
+                    ? $"✓ {_engine.IndexedPackageCount:#,0} packages found"
+                    : "Scanning packages…",
+            });
+            y += 78;
 
             // --- Behaviour (toggles) ---
             AddSection("BEHAVIOUR", left, ref y);
@@ -171,33 +184,31 @@ namespace MsfsAirportPreloader
 
         private BufferedPanel AddInput(TextBox input, int x, int y, int width, string suffix)
         {
+            int suffixWidth = string.IsNullOrEmpty(suffix) ? 0 : 30;
             var box = new BufferedPanel { Left = x, Top = y, Width = width, Height = 34, BackColor = Theme.Window };
             box.Tag = Theme.InputBorder;
             box.Paint += (_, e) =>
             {
+                Graphics g = e.Graphics;
                 var rect = new RectangleF(0, 0, box.Width - 1, box.Height - 1);
-                Theme.FillRoundedRect(e.Graphics, rect, 5f, Theme.InputBg);
-                Theme.DrawRoundedBorder(e.Graphics, rect, 5f, (Color)box.Tag);
-            };
+                Theme.FillRoundedRect(g, rect, 5f, Theme.InputBg);
+                Theme.DrawRoundedBorder(g, rect, 5f, (Color)box.Tag);
 
-            int suffixWidth = 0;
-            if (!string.IsNullOrEmpty(suffix))
-            {
-                suffixWidth = 26;
-                box.Controls.Add(new Label
+                // The unit reads as its own right-hand segment: a separator on its left, and the
+                // panel's own rounded corners + border already give it the top/right/bottom edges.
+                if (suffixWidth > 0)
                 {
-                    Text = suffix,
-                    Font = Theme.Mono(8.5f),
-                    ForeColor = Theme.TextDim,
-                    AutoSize = false,
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    Left = width - suffixWidth,
-                    Top = 0,
-                    Width = suffixWidth,
-                    Height = box.Height,
-                    BackColor = Theme.InputBg,
-                });
-            }
+                    float sepX = box.Width - suffixWidth;
+                    using (var pen = new Pen(Theme.InputBorder))
+                    {
+                        g.DrawLine(pen, sepX, 1, sepX, box.Height - 2);
+                    }
+
+                    var unitRect = new Rectangle((int)sepX, 0, suffixWidth, box.Height);
+                    TextRenderer.DrawText(g, suffix, Theme.Mono(8.5f), unitRect, Theme.TextDim,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                }
+            };
 
             input.BorderStyle = BorderStyle.None;
             input.BackColor = Theme.InputBg;
