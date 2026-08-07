@@ -445,12 +445,20 @@ namespace MsfsAirportPreloader
             int textLeft = (int)(dotX + dotSize + 12);
             int rightReserve = _bannerMode == BannerMode.Menu ? 100 : (_bannerAction.Width + 24);
             int textWidth = (int)card.Right - rightReserve - textLeft;
-            // Two lines, centred as a block within the card.
-            var titleRect = new Rectangle(textLeft, (int)card.Y + 9, textWidth, 20);
-            var detailRect = new Rectangle(textLeft, (int)card.Y + 28, textWidth, 16);
-            TextRenderer.DrawText(g, title, Theme.Sans(9.5f, FontStyle.Bold), titleRect, Theme.Text,
+
+            // Measure the two lines and centre the block, so top and bottom padding match.
+            Font titleFont = Theme.Sans(9.5f, FontStyle.Bold);
+            Font detailFont = Theme.Sans(8.5f);
+            int titleHeight = TextRenderer.MeasureText(g, title, titleFont, Size.Empty, TextFormatFlags.NoPadding).Height;
+            int detailHeight = TextRenderer.MeasureText(g, detail, detailFont, Size.Empty, TextFormatFlags.NoPadding).Height;
+            const int lineGap = 3;
+            int blockTop = (int)(card.Y + (card.Height - (titleHeight + lineGap + detailHeight)) / 2f);
+
+            var titleRect = new Rectangle(textLeft, blockTop, textWidth, titleHeight);
+            var detailRect = new Rectangle(textLeft, blockTop + titleHeight + lineGap, textWidth, detailHeight);
+            TextRenderer.DrawText(g, title, titleFont, titleRect, Theme.Text,
                 TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, detail, Theme.Sans(8.5f), detailRect, Theme.TextMuted,
+            TextRenderer.DrawText(g, detail, detailFont, detailRect, Theme.TextMuted,
                 TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
 
             if (_bannerMode == BannerMode.Menu)
