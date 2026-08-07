@@ -15,6 +15,10 @@ settings.
 
 Optional: turn on **Start with Windows** in Settings so it's always ready.
 
+RAMP won't waste effort on airports the sim already has: anything within ~5 NM (where you spawned, or
+just landed) is skipped, and a departure won't be re-read on climb-out. Fly far enough away that it
+unloads and a later return or divert warms it again normally.
+
 ## The window
 
 - **Toolbar** — the RAMP mark (its colour tracks the current activity), `Rescan`, `Log`, `Settings`,

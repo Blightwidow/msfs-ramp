@@ -50,6 +50,11 @@ destination) always wins over farther enroute airports and can't be starved by t
 Fly ~10 NM beyond the outer radius and a package is **unloaded** (its RAM-budget share is freed and it
 returns to *Unloaded* in the list), so a long flight never exhausts the budget.
 
+Airports closer than an **inner radius** (default 5 NM) are skipped — the sim has already streamed
+them (you spawned there), so re-reading is wasted I/O. Any airport you pass within that radius stays
+suppressed while you're near it, so a departure isn't pointlessly re-warmed on climb-out; fly far
+enough away that it unloads and it re-arms, so a return or divert still gets a warm cache.
+
 The app is a **WinForms tray application**: it keeps running in the background even with MSFS closed,
 and connects/reconnects automatically each time the sim starts.
 

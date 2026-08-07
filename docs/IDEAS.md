@@ -130,6 +130,18 @@ no WPF rewrite, so the SimConnect pipeline was untouched.
   **airports.csv path field was dropped** from the UI (the CSV ships with the app) — and with it the
   "airport database not found" error state; the override key still exists in the ini for edge cases.
 
+### Inner radius + already-visited suppression (implemented v1.5)
+Observed RAMP re-warming the airport you spawned at (e.g. LFPG): the sim streamed it during the
+loading screen, so re-reading is pure waste.
+- **Inner radius** (`InnerRadiusNauticalMiles`, default 5): `Engine.OnPosition` skips warming any
+  airport closer than this.
+- **Visited-this-flight set**: airports passed inside the inner radius are remembered and not
+  re-warmed while you stay near — stops a departure being re-read on climb-out.
+- **Re-arm on release**: when an airport passes the release radius (outer + 10) it's unloaded *and*
+  dropped from the visited set — the sim has evicted it too, so a return/divert warms it again.
+- **Reset per flight** via a new `SimConnectClient.SimRunningChanged` event (fires on the camera-state
+  transition); a fresh flight re-arms every airport.
+
 ## Alternatives considered (not chosen yet)
 
 ### A. BGL-derived coordinates (drop the CSV)  — strongest future candidate
