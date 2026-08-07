@@ -14,6 +14,7 @@ namespace MsfsAirportPreloader
     internal sealed class AboutForm : Form
     {
         private const string OurAirportsUrl = "https://github.com/davidmegginson/ourairports-data";
+        private const string RepoUrl = "https://github.com/Blightwidow/msfs-airport-prefetch";
 
         public AboutForm()
         {
@@ -22,7 +23,7 @@ namespace MsfsAirportPreloader
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(420, 300);
+            ClientSize = new Size(430, 384);
             BackColor = Theme.Window;
             ForeColor = Theme.Text;
             Font = Theme.Sans(9f);
@@ -47,65 +48,59 @@ namespace MsfsAirportPreloader
             };
             Controls.Add(header);
 
+            int width = ClientSize.Width - left * 2;
+
             Controls.Add(new Label
             {
                 Left = left,
-                Top = 104,
-                Width = ClientSize.Width - left * 2,
-                Height = 40,
+                Top = 102,
+                Width = width,
+                Height = 34,
                 Font = Theme.Sans(9.5f),
                 ForeColor = Theme.TextMuted,
                 Text = "Warms MSFS airport scenery into the Windows file cache before you arrive, " +
                        "so the sim streams it from RAM instead of disk.",
             });
 
+            // Free & open source + project repo.
             Controls.Add(new Label
             {
                 Left = left,
-                Top = 150,
-                Width = ClientSize.Width - left * 2,
+                Top = 142,
+                Width = width,
+                Height = 18,
+                Font = Theme.Sans(9.5f, FontStyle.Bold),
+                ForeColor = Theme.Loaded,
+                Text = "Free and open source",
+            });
+            AddLink(left, 162, width, RepoUrl);
+
+            AddDivider(left, 190, width);
+
+            // Airport data credit + thanks.
+            Controls.Add(new Label
+            {
+                Left = left,
+                Top = 202,
+                Width = width,
+                Height = 34,
+                Font = Theme.Sans(9f),
+                ForeColor = Theme.TextMuted,
+                Text = "Airport coordinates come from OurAirports, generously released into the " +
+                       "public domain. Huge thanks to its contributors — RAMP wouldn't work without it.",
+            });
+            AddLink(left, 244, width, OurAirportsUrl);
+
+            Controls.Add(new Label
+            {
+                Left = left,
+                Top = 296,
+                Width = width,
                 Height = 16,
                 Font = Theme.Mono(8f),
                 ForeColor = Theme.TextFaint,
                 Text = $"Version {AppVersion()}",
             });
-
-            var divider = new BufferedPanel
-            {
-                Left = left,
-                Top = 182,
-                Width = ClientSize.Width - left * 2,
-                Height = 1,
-                BackColor = Theme.Border,
-            };
-            Controls.Add(divider);
-
-            Controls.Add(new Label
-            {
-                Left = left,
-                Top = 196,
-                Width = ClientSize.Width - left * 2,
-                Height = 16,
-                Font = Theme.Sans(9f),
-                ForeColor = Theme.TextMuted,
-                Text = "Airport coordinates from OurAirports — public-domain data:",
-            });
-
-            var link = new LinkLabel
-            {
-                Left = left,
-                Top = 216,
-                Width = ClientSize.Width - left * 2,
-                Height = 18,
-                Font = Theme.Mono(8.5f),
-                Text = OurAirportsUrl,
-                LinkColor = Theme.Accent,
-                ActiveLinkColor = Theme.Text,
-                LinkBehavior = LinkBehavior.HoverUnderline,
-                BackColor = Theme.Window,
-            };
-            link.LinkClicked += (_, __) => OpenUrl(OurAirportsUrl);
-            Controls.Add(link);
 
             var close = new RoundedButton
             {
@@ -124,6 +119,30 @@ namespace MsfsAirportPreloader
             Controls.Add(close);
             AcceptButton = close;
             CancelButton = close;
+        }
+
+        private void AddLink(int left, int top, int width, string url)
+        {
+            var link = new LinkLabel
+            {
+                Left = left,
+                Top = top,
+                Width = width,
+                Height = 18,
+                Font = Theme.Mono(8.5f),
+                Text = url,
+                LinkColor = Theme.Accent,
+                ActiveLinkColor = Theme.Text,
+                LinkBehavior = LinkBehavior.HoverUnderline,
+                BackColor = Theme.Window,
+            };
+            link.LinkClicked += (_, __) => OpenUrl(url);
+            Controls.Add(link);
+        }
+
+        private void AddDivider(int left, int top, int width)
+        {
+            Controls.Add(new BufferedPanel { Left = left, Top = top, Width = width, Height = 1, BackColor = Theme.Border });
         }
 
         private static string AppVersion()

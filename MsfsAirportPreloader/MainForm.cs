@@ -635,10 +635,13 @@ namespace MsfsAirportPreloader
             log.Click += (_, __) => ToggleLog();
             RoundedButton settings = MakeToolButton("Settings", ref left);
             settings.Click += (_, __) => OpenSettings();
+            RoundedButton about = MakeToolButton("About", ref left);
+            about.Click += (_, __) => OpenAbout();
 
             _toolbar.Controls.Add(rescan);
             _toolbar.Controls.Add(log);
             _toolbar.Controls.Add(settings);
+            _toolbar.Controls.Add(about);
         }
 
         private RoundedButton MakeToolButton(string text, ref int left)
