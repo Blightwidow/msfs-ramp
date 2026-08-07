@@ -14,7 +14,7 @@ namespace MsfsAirportPreloader
     internal sealed class AboutForm : Form
     {
         private const string OurAirportsUrl = "https://github.com/davidmegginson/ourairports-data";
-        private const string RepoUrl = "https://github.com/Blightwidow/msfs-airport-prefetch";
+        private const string RepoUrl = "https://github.com/Blightwidow/msfs-ramp";
 
         public AboutForm()
         {
