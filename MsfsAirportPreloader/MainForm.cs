@@ -1292,11 +1292,15 @@ namespace MsfsAirportPreloader
         {
             if (m.Msg == WmNcCalcSize && m.WParam != IntPtr.Zero)
             {
-                // Let the default compute the standard non-client insets (keeps side/bottom resize
-                // borders), then pull the client's top back up over the caption we don't want.
+                // On input rgrc[0] is the proposed window rect; capture its top edge. Let the default
+                // compute the standard insets (so side/bottom resize borders stay), then push the
+                // client's top back up to the window edge — removing BOTH the caption and the top
+                // frame line (the white bar) so our dark toolbar reaches the very top.
+                var before = (NcCalcSizeParams)Marshal.PtrToStructure(m.LParam, typeof(NcCalcSizeParams));
+                int windowTop = before.Client.Top;
                 IntPtr result = DefWindowProc(m.HWnd, m.Msg, m.WParam, m.LParam);
                 var p = (NcCalcSizeParams)Marshal.PtrToStructure(m.LParam, typeof(NcCalcSizeParams));
-                p.Client.Top -= SystemInformation.CaptionHeight;
+                p.Client.Top = windowTop;
                 Marshal.StructureToPtr(p, m.LParam, false);
                 m.Result = result;
                 return;
