@@ -32,6 +32,9 @@ namespace MsfsAirportPreloader
         private volatile bool _running = true;
         private long _bytesWarmed;
 
+        /// <summary>When set, the worker stops picking up queued packages (warming is paused).</summary>
+        public volatile bool Paused;
+
         public Prefetcher(long ramBudgetMegabytes, Action<string> log)
         {
             _ramBudgetBytes = ramBudgetMegabytes * 1024L * 1024L;
@@ -147,6 +150,11 @@ namespace MsfsAirportPreloader
         {
             lock (_gate)
             {
+                if (Paused)
+                {
+                    return (null, null); // hold everything queued until warming resumes
+                }
+
                 string closestKey = null;
                 AirportState closest = null;
                 foreach (KeyValuePair<string, AirportState> pair in _states)

@@ -93,6 +93,9 @@ namespace MsfsAirportPreloader
 
         private Icon _trayIcon;
         private Color _trayColor = Color.Empty;
+        private ToolStripLabel _trayHeaderStatus;
+        private ToolStripMenuItem _trayPauseItem;
+        private bool _balloonedThisFlight;
 
         public MainForm(Engine engine, string iniPath)
         {
@@ -991,6 +994,11 @@ namespace MsfsAirportPreloader
                     return ("needs attention", Theme.Skipped);
             }
 
+            if (_engine.IsPaused)
+            {
+                return ("paused", Theme.Skipped);
+            }
+
             if (!_engine.IsSimConnected)
             {
                 return ("MSFS not detected", Theme.TextFaint);
@@ -1068,13 +1076,60 @@ namespace MsfsAirportPreloader
             UpdateTrayIcon(Theme.Unloaded);
             _tray.Visible = true;
 
-            var menu = new ContextMenuStrip();
-            menu.Items.Add("Open", null, (_, __) => RestoreFromTray());
-            menu.Items.Add("Settings", null, (_, __) => OpenSettings());
-            menu.Items.Add("About", null, (_, __) => OpenAbout());
+            var menu = new ContextMenuStrip
+            {
+                Renderer = new DarkMenuRenderer(),
+                BackColor = Theme.Raised,
+                ForeColor = Theme.Text,
+                ShowImageMargin = false,
+                Font = Theme.Sans(9f),
+            };
+
+            // Header readout — the menu doubles as a status panel (design 2f).
+            var headerName = new ToolStripLabel("RAMP")
+            {
+                Font = Theme.Mono(8f, FontStyle.Bold),
+                ForeColor = Theme.TextMuted,
+                Enabled = false,
+                Margin = new Padding(4, 4, 4, 0),
+            };
+            _trayHeaderStatus = new ToolStripLabel("idle")
+            {
+                Font = Theme.Sans(8.5f),
+                ForeColor = Theme.Loaded,
+                Enabled = false,
+                Margin = new Padding(4, 0, 4, 4),
+            };
+
+            _trayPauseItem = new ToolStripMenuItem("Pause warming", null, (_, __) => TogglePause());
+
+            menu.Items.Add(headerName);
+            menu.Items.Add(_trayHeaderStatus);
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Open RAMP", null, (_, __) => RestoreFromTray());
+            menu.Items.Add("Settings…", null, (_, __) => OpenSettings());
+            menu.Items.Add(_trayPauseItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, (_, __) => { _reallyExit = true; Close(); });
+            menu.Opening += (_, __) => UpdateTrayMenu();
             _tray.ContextMenuStrip = menu;
+        }
+
+        private void UpdateTrayMenu()
+        {
+            float usedGb = _cacheUsedBytes / (1024f * 1024f * 1024f);
+            _trayHeaderStatus.Text = _engine.IsPaused
+                ? "paused"
+                : $"{_countLoaded} loaded · {_countWarming} warming · {usedGb:0.00} GB";
+            _trayHeaderStatus.ForeColor = _engine.IsPaused ? Theme.Skipped : Theme.Loaded;
+            _trayPauseItem.Text = _engine.IsPaused ? "Resume warming" : "Pause warming";
+        }
+
+        private void TogglePause()
+        {
+            _engine.SetPaused(!_engine.IsPaused);
+            UpdateTrayMenu();
+            _statusBar.Invalidate();
         }
 
         /// <summary>Recolour the tray glyph to the dominant state so it reads at a glance.</summary>
@@ -1179,6 +1234,7 @@ namespace MsfsAirportPreloader
             RecomputeStats(states);
             UpdateGlyphColor(states);
             UpdateStateChrome(states.Count == 0);
+            AnnounceWarmed(states);
 
             _statsStrip.Invalidate();
             _statusBar.Invalidate();
@@ -1249,6 +1305,45 @@ namespace MsfsAirportPreloader
             _cacheUsedBytes = _loadedBytes + _warmingBytes;
             _cacheBudgetBytes = _engine.CurrentConfig.RamBudgetMegabytes * 1024L * 1024L;
             _anyWarming = _countWarming > 0;
+        }
+
+        /// <summary>
+        /// One balloon per flight: when the nearest tracked airport finishes warming, tell the user
+        /// their approach is covered. Resets whenever the flight ends. No flight plan exists, so the
+        /// nearest Loaded field stands in for "the destination".
+        /// </summary>
+        private void AnnounceWarmed(List<AirportState> states)
+        {
+            if (!_engine.IsSimRunning)
+            {
+                _balloonedThisFlight = false; // armed again for the next flight
+                return;
+            }
+
+            if (_balloonedThisFlight)
+            {
+                return;
+            }
+
+            AirportState nearestLoaded = null;
+            foreach (AirportState state in states)
+            {
+                if (state.State == PrefetchState.Loaded &&
+                    (nearestLoaded == null || state.DistanceNauticalMiles < nearestLoaded.DistanceNauticalMiles))
+                {
+                    nearestLoaded = state;
+                }
+            }
+
+            if (nearestLoaded == null)
+            {
+                return;
+            }
+
+            _balloonedThisFlight = true;
+            long megabytes = nearestLoaded.WarmedBytes / (1024 * 1024);
+            _tray.ShowBalloonTip(4000, $"{nearestLoaded.Icao} is warm",
+                $"{megabytes:#,0} MB cached — your approach won't stutter.", ToolTipIcon.Info);
         }
 
         /// <summary>

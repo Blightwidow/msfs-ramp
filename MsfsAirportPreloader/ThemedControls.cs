@@ -63,6 +63,44 @@ namespace MsfsAirportPreloader
         }
     }
 
+    /// <summary>Dark colour table for the tray context menu.</summary>
+    internal sealed class DarkMenuColors : System.Windows.Forms.ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground => Theme.Raised;
+        public override Color ImageMarginGradientBegin => Theme.Raised;
+        public override Color ImageMarginGradientMiddle => Theme.Raised;
+        public override Color ImageMarginGradientEnd => Theme.Raised;
+        public override Color MenuItemSelected => Theme.RaisedHover;
+        public override Color MenuItemSelectedGradientBegin => Theme.RaisedHover;
+        public override Color MenuItemSelectedGradientEnd => Theme.RaisedHover;
+        public override Color MenuItemBorder => Theme.Border;
+        public override Color MenuBorder => Theme.Border;
+        public override Color SeparatorDark => Theme.Border;
+        public override Color SeparatorLight => Theme.Border;
+        public override Color CheckBackground => Theme.RaisedHover;
+        public override Color CheckSelectedBackground => Theme.Accent;
+    }
+
+    /// <summary>Renders the tray menu dark, honouring any per-item ForeColor (e.g. the readout).</summary>
+    internal sealed class DarkMenuRenderer : System.Windows.Forms.ToolStripProfessionalRenderer
+    {
+        public DarkMenuRenderer() : base(new DarkMenuColors()) => RoundedEdges = false;
+
+        protected override void OnRenderItemText(System.Windows.Forms.ToolStripItemTextRenderEventArgs e)
+        {
+            if (e.Item.ForeColor != System.Drawing.SystemColors.ControlText)
+            {
+                e.TextColor = e.Item.ForeColor; // header labels set their own colour
+            }
+            else
+            {
+                e.TextColor = e.Item.Enabled ? Theme.Text : Theme.TextDim;
+            }
+
+            base.OnRenderItemText(e);
+        }
+    }
+
     /// <summary>A pill toggle in the RAMP style — accent when on, sunken when off.</summary>
     internal sealed class ToggleSwitch : Control
     {

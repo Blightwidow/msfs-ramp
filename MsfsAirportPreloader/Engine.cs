@@ -67,6 +67,22 @@ namespace MsfsAirportPreloader
         /// <summary>Folder being scanned — shown under the "indexing" spinner.</summary>
         public string ScanRootPath { get; private set; }
 
+        private volatile bool _paused;
+
+        /// <summary>User-requested pause — stops queuing and warming until resumed.</summary>
+        public bool IsPaused => _paused;
+
+        public void SetPaused(bool paused)
+        {
+            _paused = paused;
+            if (_prefetcher != null)
+            {
+                _prefetcher.Paused = paused;
+            }
+
+            Log(paused ? "Warming paused." : "Warming resumed.");
+        }
+
         public void Start()
         {
             _prefetcher = new Prefetcher(_config.RamBudgetMegabytes, Log);
@@ -197,7 +213,7 @@ namespace MsfsAirportPreloader
         {
             // Don't warm during the loading screen / menus — it would compete with the sim's own
             // disk reads and slow the load. Only act once the sim reports it's in a flight.
-            if (!Ready || !(_simConnect?.IsSimRunning ?? false))
+            if (!Ready || _paused || !(_simConnect?.IsSimRunning ?? false))
             {
                 return;
             }
