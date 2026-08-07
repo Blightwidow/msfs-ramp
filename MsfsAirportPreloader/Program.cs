@@ -14,6 +14,7 @@ namespace MsfsAirportPreloader
 
             string iniPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "preloader.ini");
             Config config = Config.Load(iniPath);
+            Theme.Apply(config.Appearance);
 
             StartupRegistry.Apply(config.StartWithWindows, null);
 

@@ -5,6 +5,64 @@ using System.Windows.Forms;
 
 namespace MsfsAirportPreloader
 {
+    /// <summary>
+    /// A flat button with rounded corners, matching the design's 5 px radius. Still a Button so it
+    /// keeps DialogResult / AcceptButton behaviour; it just owner-paints its own rounded surface.
+    /// </summary>
+    internal sealed class RoundedButton : Button
+    {
+        public Color BorderColor { get; set; } = Theme.InputBorder;
+        public Color HoverColor { get; set; } = Color.Empty; // Empty = no hover change
+        public int CornerRadius { get; set; } = 5;
+
+        private bool _hovered;
+
+        public RoundedButton()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+            FlatStyle = FlatStyle.Flat;
+            FlatAppearance.BorderSize = 0;
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            _hovered = true;
+            Invalidate();
+            base.OnMouseEnter(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _hovered = false;
+            Invalidate();
+            base.OnMouseLeave(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+
+            // Paint the corners with the parent's colour so the rounding reads as transparent.
+            using (var backdrop = new SolidBrush(Parent?.BackColor ?? BackColor))
+            {
+                g.FillRectangle(backdrop, ClientRectangle);
+            }
+
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+            Color fill = _hovered && HoverColor != Color.Empty ? HoverColor : BackColor;
+            Theme.FillRoundedRect(g, rect, CornerRadius, fill);
+            if (BorderColor != Color.Empty)
+            {
+                Theme.DrawRoundedBorder(g, rect, CornerRadius, BorderColor);
+            }
+
+            TextRenderer.DrawText(g, Text, Font, ClientRectangle, ForeColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+    }
+
     /// <summary>A pill toggle in the RAMP style — accent when on, sunken when off.</summary>
     internal sealed class ToggleSwitch : Control
     {

@@ -23,12 +23,14 @@ namespace MsfsAirportPreloader
         private readonly Slider _ramSlider = new Slider();
         private readonly Label _ramValue = new Label();
         private readonly TextBox _packagesPath = new TextBox();
-        private readonly TextBox _airportsCsv = new TextBox();
         private readonly ToggleSwitch _startWithWindows = new ToggleSwitch();
         private readonly ToggleSwitch _verbose = new ToggleSwitch();
 
         private BufferedPanel _outerRadiusBox;
         private Label _outerRadiusHint;
+
+        private Config.ThemeMode _appearance;
+        private readonly RoundedButton[] _themeButtons = new RoundedButton[3];
 
         public SettingsForm(Engine engine, string iniPath)
         {
@@ -46,7 +48,7 @@ namespace MsfsAirportPreloader
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(520, 580);
+            ClientSize = new Size(520, 620);
             BackColor = Theme.Window;
             ForeColor = Theme.Text;
             Font = Theme.Sans(9f);
@@ -58,8 +60,8 @@ namespace MsfsAirportPreloader
             // --- Range & timing (two columns) ---
             AddSection("RANGE & TIMING", left, ref y);
             int half = (fullWidth - 14) / 2;
-            AddFieldLabel($"Outer radius", left, y);
-            AddFieldLabel("Poll interval", left + half + 14, y);
+            AddFieldLabel("Outer radius", left, y, half);
+            AddFieldLabel("Poll interval", left + half + 14, y, half);
             _outerRadiusBox = AddInput(_outerRadius, left, y + 18, half, "NM");
             AddInput(_pollSeconds, left + half + 14, y + 18, half, "s");
             _outerRadiusHint = new Label
@@ -78,7 +80,7 @@ namespace MsfsAirportPreloader
 
             // --- Memory (slider) ---
             AddSection("MEMORY", left, ref y);
-            AddFieldLabel("RAM budget", left, y);
+            AddFieldLabel("RAM budget", left, y, half);
             _ramValue.SetBounds(left, y, fullWidth, 16);
             _ramValue.Font = Theme.Mono(10f, FontStyle.Bold);
             _ramValue.ForeColor = Theme.Text;
@@ -117,17 +119,19 @@ namespace MsfsAirportPreloader
 
             // --- Paths ---
             AddSection("PATHS", left, ref y);
-            AddFieldLabel("MSFS package folder (blank = auto-detect)", left, y);
+            AddFieldLabel("MSFS package folder", left, y, fullWidth);
             AddPathInput(_packagesPath, left, y + 18, fullWidth, browseFolder: true);
-            y += 58;
-            AddFieldLabel("airports.csv (blank = beside the app)", left, y);
-            AddPathInput(_airportsCsv, left, y + 18, fullWidth, browseFolder: false);
             y += 58;
 
             // --- Behaviour (toggles) ---
             AddSection("BEHAVIOUR", left, ref y);
             AddToggle(_startWithWindows, "Start with Windows", left, ref y);
             AddToggle(_verbose, "Verbose logging", left, ref y);
+
+            // --- Appearance (theme selector) ---
+            AddSection("APPEARANCE", left, ref y);
+            BuildThemeSelector(left, y, fullWidth);
+            y += 42;
 
             BuildFooter();
         }
@@ -149,14 +153,16 @@ namespace MsfsAirportPreloader
             y += 24;
         }
 
-        private void AddFieldLabel(string text, int x, int y)
+        private void AddFieldLabel(string text, int x, int y, int width)
         {
+            // Bound the width to the field's own column — a full-width opaque label would sit in
+            // front of and hide the neighbouring column's label.
             Controls.Add(new Label
             {
                 Text = text,
                 Left = x,
                 Top = y,
-                Width = 320,
+                Width = width,
                 Height = 16,
                 Font = Theme.Sans(9f),
                 ForeColor = Theme.TextMuted,
@@ -211,20 +217,20 @@ namespace MsfsAirportPreloader
             const int browseWidth = 76;
             AddInput(input, x, y, width - browseWidth - 8, null);
 
-            var browse = new Button
+            var browse = new RoundedButton
             {
                 Text = "Browse",
-                FlatStyle = FlatStyle.Flat,
                 Font = Theme.Sans(9f),
                 ForeColor = Theme.TextMuted,
                 BackColor = Theme.RaisedHover,
+                BorderColor = Theme.InputBorder,
+                HoverColor = Theme.Border,
                 Left = x + width - browseWidth,
                 Top = y,
                 Width = browseWidth,
                 Height = 34,
                 TabStop = false,
             };
-            browse.FlatAppearance.BorderColor = Theme.InputBorder;
             browse.Click += (_, __) => Browse(input, browseFolder);
             Controls.Add(browse);
         }
@@ -248,40 +254,92 @@ namespace MsfsAirportPreloader
             y += 32;
         }
 
+        // Segmented three-way theme picker; the enum order (System, Light, Dark) matches button order.
+        private void BuildThemeSelector(int left, int y, int width)
+        {
+            string[] labels = { "Follow system", "Light", "Dark" };
+            const int gap = 8;
+            int buttonWidth = (width - gap * 2) / 3;
+
+            for (int index = 0; index < _themeButtons.Length; index++)
+            {
+                int captured = index;
+                var button = new RoundedButton
+                {
+                    Text = labels[index],
+                    Font = Theme.Sans(9f),
+                    Height = 34,
+                    Width = buttonWidth,
+                    Left = left + index * (buttonWidth + gap),
+                    Top = y,
+                    TabStop = false,
+                };
+                button.Click += (_, __) => SelectTheme(captured);
+                _themeButtons[index] = button;
+                Controls.Add(button);
+            }
+
+            StyleThemeButtons();
+        }
+
+        private void SelectTheme(int index)
+        {
+            _appearance = (Config.ThemeMode)index;
+            StyleThemeButtons();
+        }
+
+        private void StyleThemeButtons()
+        {
+            for (int index = 0; index < _themeButtons.Length; index++)
+            {
+                RoundedButton button = _themeButtons[index];
+                if (button == null)
+                {
+                    continue;
+                }
+
+                bool selected = (int)_appearance == index;
+                button.BackColor = selected ? Theme.Accent : Theme.RaisedHover;
+                button.ForeColor = selected ? Color.FromArgb(0x08, 0x12, 0x1A) : Theme.TextMuted;
+                button.BorderColor = selected ? Color.Empty : Theme.InputBorder;
+                button.HoverColor = selected ? Theme.Accent : Theme.Border;
+                button.Invalidate();
+            }
+        }
+
         private void BuildFooter()
         {
-            var save = new Button
+            var save = new RoundedButton
             {
                 Text = "Save",
                 DialogResult = DialogResult.OK,
-                FlatStyle = FlatStyle.Flat,
                 Font = Theme.Sans(9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(0x08, 0x12, 0x1A),
                 BackColor = Theme.Accent,
+                BorderColor = Color.Empty,
                 Width = 92,
                 Height = 34,
                 Top = ClientSize.Height - 50,
                 Left = ClientSize.Width - 92 - 22,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
             };
-            save.FlatAppearance.BorderSize = 0;
             save.Click += (_, __) => Apply();
 
-            var cancel = new Button
+            var cancel = new RoundedButton
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                FlatStyle = FlatStyle.Flat,
                 Font = Theme.Sans(9.5f),
                 ForeColor = Theme.TextMuted,
                 BackColor = Theme.Window,
+                BorderColor = Theme.InputBorder,
+                HoverColor = Theme.RaisedHover,
                 Width = 92,
                 Height = 34,
                 Top = ClientSize.Height - 50,
                 Left = ClientSize.Width - 92 - 22 - 100,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
             };
-            cancel.FlatAppearance.BorderColor = Theme.InputBorder;
 
             var divider = new BufferedPanel
             {
@@ -326,10 +384,13 @@ namespace MsfsAirportPreloader
             _pollSeconds.Text = _original.PollSeconds.ToString(CultureInfo.InvariantCulture);
             _ramSlider.Value = Math.Round(_original.RamBudgetMegabytes / 1024.0);
             UpdateRamLabel();
-            _packagesPath.Text = _original.InstalledPackagesPathOverride;
-            _airportsCsv.Text = _original.AirportsCsvPathOverride;
+            // Show the actual folder in use — the saved override if any, otherwise the auto-detected
+            // path — rather than an empty box, so the user can see and correct it.
+            _packagesPath.Text = PackagePathResolver.Resolve(_original.InstalledPackagesPathOverride, null) ?? string.Empty;
             _startWithWindows.Checked = _original.StartWithWindows;
             _verbose.Checked = _original.Verbose;
+            _appearance = _original.Appearance;
+            StyleThemeButtons();
             ValidateOuterRadius();
         }
 
@@ -377,16 +438,19 @@ namespace MsfsAirportPreloader
             updated.PollSeconds = ParseDouble(_pollSeconds.Text, _original.PollSeconds);
             updated.RamBudgetMegabytes = (long)Math.Round(_ramSlider.Value * 1024);
             updated.InstalledPackagesPathOverride = _packagesPath.Text.Trim();
-            updated.AirportsCsvPathOverride = _airportsCsv.Text.Trim();
+            // airports.csv path is no longer exposed in the UI; it stays whatever it was (blank =
+            // the copy beside the app).
             updated.StartWithWindows = _startWithWindows.Checked;
             updated.Verbose = _verbose.Checked;
+            updated.Appearance = _appearance;
 
-            bool rescan =
-                !string.Equals(updated.InstalledPackagesPathOverride, _original.InstalledPackagesPathOverride, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(updated.AirportsCsvPathOverride, _original.AirportsCsvPathOverride, StringComparison.OrdinalIgnoreCase);
+            bool rescan = !string.Equals(
+                updated.InstalledPackagesPathOverride, _original.InstalledPackagesPathOverride, StringComparison.OrdinalIgnoreCase);
 
             updated.Save(_iniPath);
             StartupRegistry.Apply(updated.StartWithWindows, null);
+            // Activate the chosen theme now; the parent window re-skins itself when this dialog closes.
+            Theme.Apply(updated.Appearance);
             _engine.ApplyConfig(updated, rescan);
         }
 

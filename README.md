@@ -1,4 +1,4 @@
-# MSFS Airport Preloader
+# RAMP — RAM Airport Preloader
 
 A background utility for **Microsoft Flight Simulator 2020** that eliminates the freeze/stutter
 that happens when you fly within ~25 NM of an add-on airport whose files live on a slow **HDD**.
@@ -97,7 +97,7 @@ dotnet build -c Release
 **Visual Studio:** open `MsfsAirportPreloader/MsfsAirportPreloader.csproj`, set configuration to
 `Release`/`x64`, Build.
 
-Output: `bin/Release/net48/MsfsAirportPreloader.exe`. `SimConnect.dll`, `airports.csv`, and
+Output: `bin/Release/net48/RAMP.exe`. `SimConnect.dll`, `airports.csv`, and
 `preloader.ini` are copied next to it automatically.
 
 ### Build troubleshooting
@@ -112,7 +112,7 @@ Output: `bin/Release/net48/MsfsAirportPreloader.exe`. `SimConnect.dll`, `airport
 
 ## Run
 
-Launch `MsfsAirportPreloader.exe` — it can run with MSFS open or closed. On first start it loads the
+Launch `RAMP.exe` — it can run with MSFS open or closed. On first start it loads the
 airport database and scans your `Community` + `Official` scenery packages once (auto-detecting
 `InstalledPackagesPath` from `UserCfg.opt`, Store/Game Pass and Steam layouts). Then it waits for MSFS
 and connects automatically; start a flight and it tracks your position.

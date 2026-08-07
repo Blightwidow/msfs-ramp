@@ -16,31 +16,101 @@ namespace MsfsAirportPreloader
     /// </summary>
     internal static class Theme
     {
-        // --- Surfaces (dark theme) -------------------------------------------------------
-        public static readonly Color Canvas = FromHex("#080C11"); // desktop behind the window
-        public static readonly Color Sunken = FromHex("#0B1219"); // header/footer bars
-        public static readonly Color Window = FromHex("#0E151D"); // main window body
-        public static readonly Color Raised = FromHex("#111A24"); // toolbar, cards, inputs
-        public static readonly Color RaisedHover = FromHex("#16222E");
-        public static readonly Color Border = FromHex("#1F2E3C");
-        public static readonly Color BorderSoft = FromHex("#1A2732");
-        public static readonly Color InputBg = FromHex("#131E28");
-        public static readonly Color InputBorder = FromHex("#26333F");
+        /// <summary>
+        /// One theme's full colour set. Two instances exist — dark and light — and <see cref="Apply"/>
+        /// swaps <see cref="_current"/> between them. Every colour below is a property that reads the
+        /// current palette, so call sites (Theme.Window, Theme.Text, …) keep working unchanged and
+        /// pick up the active theme.
+        /// </summary>
+        private sealed class Palette
+        {
+            public Color Canvas, Sunken, Window, Raised, RaisedHover, Border, BorderSoft, InputBg, InputBorder;
+            public Color Text, TextMuted, TextDim, TextFaint;
+            public Color Loaded, Warming, Queued, Skipped, Unloaded;
+        }
+
+        private static readonly Palette Dark = new Palette
+        {
+            Canvas = FromHex("#080C11"), Sunken = FromHex("#0B1219"), Window = FromHex("#0E151D"),
+            Raised = FromHex("#111A24"), RaisedHover = FromHex("#16222E"), Border = FromHex("#1F2E3C"),
+            BorderSoft = FromHex("#1A2732"), InputBg = FromHex("#131E28"), InputBorder = FromHex("#26333F"),
+            Text = FromHex("#E4EDF5"), TextMuted = FromHex("#9DB2C4"), TextDim = FromHex("#6E869A"),
+            TextFaint = FromHex("#5C7A90"),
+            Loaded = FromHex("#46D08A"), Warming = FromHex("#3FC7F4"), Queued = FromHex("#9B8CFA"),
+            Skipped = FromHex("#F0B429"), Unloaded = FromHex("#5C6E7E"),
+        };
+
+        // Light theme: same tokens, inverted surfaces, darker status hues for contrast on white.
+        private static readonly Palette Light = new Palette
+        {
+            Canvas = FromHex("#E6ECF2"), Sunken = FromHex("#E6ECF2"), Window = FromHex("#F2F5F8"),
+            Raised = FromHex("#FFFFFF"), RaisedHover = FromHex("#E9EEF3"), Border = FromHex("#CBD6E0"),
+            BorderSoft = FromHex("#DDE5EC"), InputBg = FromHex("#FFFFFF"), InputBorder = FromHex("#CBD6E0"),
+            Text = FromHex("#12202C"), TextMuted = FromHex("#334A5D"), TextDim = FromHex("#5E7387"),
+            TextFaint = FromHex("#6E8296"),
+            Loaded = FromHex("#128455"), Warming = FromHex("#0EA5C6"), Queued = FromHex("#5B4BC4"),
+            Skipped = FromHex("#96650A"), Unloaded = FromHex("#6B7F90"),
+        };
+
+        private static Palette _current = Dark;
+
+        /// <summary>True when the active theme is the light one — for any light-specific tweaks.</summary>
+        public static bool IsLight { get; private set; }
+
+        /// <summary>Resolve and activate a theme. "System" reads the Windows apps-theme preference.</summary>
+        public static void Apply(Config.ThemeMode mode)
+        {
+            bool light = mode == Config.ThemeMode.Light ||
+                         (mode == Config.ThemeMode.System && SystemPrefersLight());
+            _current = light ? Light : Dark;
+            IsLight = light;
+        }
+
+        private static bool SystemPrefersLight()
+        {
+            try
+            {
+                using Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                object value = key?.GetValue("AppsUseLightTheme");
+                if (value is int light)
+                {
+                    return light != 0;
+                }
+            }
+            catch
+            {
+                // registry unreadable — fall back to the app's native dark look
+            }
+
+            return false;
+        }
+
+        // --- Surfaces --------------------------------------------------------------------
+        public static Color Canvas => _current.Canvas;      // desktop behind the window
+        public static Color Sunken => _current.Sunken;      // header/footer bars
+        public static Color Window => _current.Window;      // main window body
+        public static Color Raised => _current.Raised;      // toolbar, cards, inputs
+        public static Color RaisedHover => _current.RaisedHover;
+        public static Color Border => _current.Border;
+        public static Color BorderSoft => _current.BorderSoft;
+        public static Color InputBg => _current.InputBg;
+        public static Color InputBorder => _current.InputBorder;
 
         // --- Text ------------------------------------------------------------------------
-        public static readonly Color Text = FromHex("#E4EDF5");
-        public static readonly Color TextMuted = FromHex("#9DB2C4");
-        public static readonly Color TextDim = FromHex("#6E869A");
-        public static readonly Color TextFaint = FromHex("#5C7A90");
+        public static Color Text => _current.Text;
+        public static Color TextMuted => _current.TextMuted;
+        public static Color TextDim => _current.TextDim;
+        public static Color TextFaint => _current.TextFaint;
 
         // --- Status palette — distinct in hue AND lightness (safe for deutan/protan) -----
-        public static readonly Color Loaded = FromHex("#46D08A");
-        public static readonly Color Warming = FromHex("#3FC7F4");
-        public static readonly Color Queued = FromHex("#9B8CFA");
-        public static readonly Color Skipped = FromHex("#F0B429");
-        public static readonly Color Unloaded = FromHex("#5C6E7E");
+        public static Color Loaded => _current.Loaded;
+        public static Color Warming => _current.Warming;
+        public static Color Queued => _current.Queued;
+        public static Color Skipped => _current.Skipped;
+        public static Color Unloaded => _current.Unloaded;
 
-        public static readonly Color Accent = Warming;
+        public static Color Accent => _current.Warming;
 
         /// <summary>Rail / chip / dot colour for a prefetch state.</summary>
         public static Color StateColor(PrefetchState state)

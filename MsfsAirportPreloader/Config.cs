@@ -9,6 +9,9 @@ namespace MsfsAirportPreloader
     /// <summary>Runtime settings, persisted to preloader.ini next to the executable.</summary>
     internal sealed class Config
     {
+        /// <summary>Which colour theme the UI uses. System follows the Windows apps-theme setting.</summary>
+        public enum ThemeMode { System, Light, Dark }
+
         /// <summary>MSFS starts streaming airport scenery around here; warming must begin before it.</summary>
         public const double MsfsLoadRadiusNauticalMiles = 25.0;
 
@@ -37,6 +40,9 @@ namespace MsfsAirportPreloader
         public bool StartWithWindows { get; set; } = false;
 
         public bool Verbose { get; set; } = true;
+
+        /// <summary>UI colour theme. Defaults to following the Windows apps-theme setting.</summary>
+        public ThemeMode Appearance { get; set; } = ThemeMode.System;
 
         public Config Clone() => (Config)MemberwiseClone();
 
@@ -75,6 +81,7 @@ namespace MsfsAirportPreloader
             config.AirportsCsvPathOverride = ReadString(values, "AirportsCsvPath", config.AirportsCsvPathOverride);
             config.StartWithWindows = ReadBool(values, "StartWithWindows", config.StartWithWindows);
             config.Verbose = ReadBool(values, "Verbose", config.Verbose);
+            config.Appearance = ReadEnum(values, "Theme", config.Appearance);
             return config;
         }
 
@@ -101,6 +108,9 @@ namespace MsfsAirportPreloader
             builder.AppendLine();
             builder.AppendLine($"StartWithWindows = {(StartWithWindows ? "true" : "false")}");
             builder.AppendLine($"Verbose = {(Verbose ? "true" : "false")}");
+            builder.AppendLine();
+            builder.AppendLine("# UI theme: System (follow Windows), Light, or Dark.");
+            builder.AppendLine($"Theme = {Appearance}");
 
             File.WriteAllText(iniPath, builder.ToString());
         }
@@ -119,5 +129,10 @@ namespace MsfsAirportPreloader
 
         private static bool ReadBool(Dictionary<string, string> values, string key, bool fallback)
             => values.TryGetValue(key, out string value) && bool.TryParse(value, out bool parsed) ? parsed : fallback;
+
+        private static ThemeMode ReadEnum(Dictionary<string, string> values, string key, ThemeMode fallback)
+            => values.TryGetValue(key, out string value) && Enum.TryParse(value, ignoreCase: true, out ThemeMode parsed)
+                ? parsed
+                : fallback;
     }
 }

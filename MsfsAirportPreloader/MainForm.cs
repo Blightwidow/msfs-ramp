@@ -51,6 +51,7 @@ namespace MsfsAirportPreloader
         private readonly BufferedPanel _logPanel = new BufferedPanel();
         private readonly BufferedListView _list = new BufferedListView();
         private readonly TextBox _logBox = new TextBox();
+        private Label _logHeader;
 
         private readonly Timer _refreshTimer = new Timer();
         private readonly Timer _animTimer = new Timer();
@@ -127,6 +128,48 @@ namespace MsfsAirportPreloader
             Controls.Add(_statusBar);  // Bottom, outermost
             Controls.Add(_statsStrip); // Top, below the toolbar
             Controls.Add(_toolbar);    // Top, outermost
+
+            ApplyTheme();
+        }
+
+        /// <summary>Re-apply the active theme's colours to every owned control, then repaint.</summary>
+        private void ApplyTheme()
+        {
+            BackColor = Theme.Window;
+            ForeColor = Theme.Text;
+
+            _toolbar.BackColor = Theme.Raised;
+            foreach (Control control in _toolbar.Controls)
+            {
+                if (control is RoundedButton button)
+                {
+                    button.BackColor = Theme.RaisedHover;
+                    button.ForeColor = Theme.TextMuted;
+                    button.BorderColor = Theme.InputBorder;
+                    button.HoverColor = Theme.Border;
+                }
+            }
+
+            _statsStrip.BackColor = Theme.Window;
+            _statusBar.BackColor = Theme.Sunken;
+            _list.BackColor = Theme.Window;
+            _list.ForeColor = Theme.Text;
+
+            _logPanel.BackColor = Theme.Sunken;
+            _logBox.BackColor = Theme.Sunken;
+            _logBox.ForeColor = Theme.TextMuted;
+            if (_logHeader != null)
+            {
+                _logHeader.BackColor = Theme.Sunken;
+                _logHeader.ForeColor = Theme.TextFaint;
+            }
+
+            Invalidate(true);
+            _toolbar.Invalidate();
+            _statsStrip.Invalidate();
+            _statusBar.Invalidate();
+            _logPanel.Invalidate();
+            _list.Invalidate();
         }
 
         // --- Toolbar -----------------------------------------------------------------------
@@ -139,11 +182,11 @@ namespace MsfsAirportPreloader
             _toolbar.Paint += PaintToolbar;
 
             int left = 132; // clears the logo tile and the RAMP wordmark painted behind
-            Button rescan = MakeToolButton("Rescan", ref left);
+            RoundedButton rescan = MakeToolButton("Rescan", ref left);
             rescan.Click += (_, __) => _engine.ApplyConfig(_engine.CurrentConfig, rescanPackages: true);
-            Button log = MakeToolButton("Log", ref left);
+            RoundedButton log = MakeToolButton("Log", ref left);
             log.Click += (_, __) => ToggleLog();
-            Button settings = MakeToolButton("Settings", ref left);
+            RoundedButton settings = MakeToolButton("Settings", ref left);
             settings.Click += (_, __) => OpenSettings();
 
             _toolbar.Controls.Add(rescan);
@@ -151,24 +194,22 @@ namespace MsfsAirportPreloader
             _toolbar.Controls.Add(settings);
         }
 
-        private Button MakeToolButton(string text, ref int left)
+        private RoundedButton MakeToolButton(string text, ref int left)
         {
-            var button = new Button
+            var button = new RoundedButton
             {
                 Text = text,
-                FlatStyle = FlatStyle.Flat,
                 Font = Theme.Sans(9f),
                 ForeColor = Theme.TextMuted,
                 BackColor = Theme.RaisedHover,
+                BorderColor = Theme.InputBorder,
+                HoverColor = Theme.Border,
                 Height = 28,
                 Width = 78,
                 Top = 8,
                 Left = left,
                 TabStop = false,
             };
-            button.FlatAppearance.BorderColor = Theme.InputBorder;
-            button.FlatAppearance.MouseOverBackColor = Theme.Border;
-            button.FlatAppearance.MouseDownBackColor = Theme.Border;
             left += button.Width + 6;
             return button;
         }
@@ -547,7 +588,7 @@ namespace MsfsAirportPreloader
                 e.Graphics.DrawLine(pen, 0, 0, _logPanel.Width, 0);
             };
 
-            var header = new Label
+            _logHeader = new Label
             {
                 Text = "LOG",
                 Dock = DockStyle.Top,
@@ -569,7 +610,7 @@ namespace MsfsAirportPreloader
             _logBox.Font = Theme.Mono(8f);
 
             _logPanel.Controls.Add(_logBox);
-            _logPanel.Controls.Add(header);
+            _logPanel.Controls.Add(_logHeader);
         }
 
         private void ToggleLog()
@@ -589,6 +630,7 @@ namespace MsfsAirportPreloader
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open", null, (_, __) => RestoreFromTray());
             menu.Items.Add("Settings", null, (_, __) => OpenSettings());
+            menu.Items.Add("About", null, (_, __) => OpenAbout());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, (_, __) => { _reallyExit = true; Close(); });
             _tray.ContextMenuStrip = menu;
@@ -652,6 +694,14 @@ namespace MsfsAirportPreloader
         private void OpenSettings()
         {
             using var dialog = new SettingsForm(_engine, _iniPath);
+            dialog.ShowDialog(this);
+            // The theme may have changed on save — re-skin the main window to match.
+            ApplyTheme();
+        }
+
+        private void OpenAbout()
+        {
+            using var dialog = new AboutForm();
             dialog.ShowDialog(this);
         }
 
