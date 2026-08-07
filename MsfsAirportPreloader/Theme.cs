@@ -27,6 +27,7 @@ namespace MsfsAirportPreloader
             public Color Canvas, Sunken, Window, Raised, RaisedHover, Border, BorderSoft, InputBg, InputBorder;
             public Color Text, TextMuted, TextDim, TextFaint;
             public Color Loaded, Warming, Queued, Skipped, Unloaded;
+            public Color Pinned;
         }
 
         private static readonly Palette Dark = new Palette
@@ -38,6 +39,7 @@ namespace MsfsAirportPreloader
             TextFaint = FromHex("#5C7A90"),
             Loaded = FromHex("#46D08A"), Warming = FromHex("#3FC7F4"), Queued = FromHex("#9B8CFA"),
             Skipped = FromHex("#F0B429"), Unloaded = FromHex("#5C6E7E"),
+            Pinned = FromHex("#FF7A59"),
         };
 
         // Light theme: same tokens, inverted surfaces, darker status hues for contrast on white.
@@ -50,6 +52,7 @@ namespace MsfsAirportPreloader
             TextFaint = FromHex("#6E8296"),
             Loaded = FromHex("#128455"), Warming = FromHex("#0EA5C6"), Queued = FromHex("#5B4BC4"),
             Skipped = FromHex("#96650A"), Unloaded = FromHex("#6B7F90"),
+            Pinned = FromHex("#C2410C"),
         };
 
         private static Palette _current = Dark;
@@ -109,6 +112,9 @@ namespace MsfsAirportPreloader
         public static Color Queued => _current.Queued;
         public static Color Skipped => _current.Skipped;
         public static Color Unloaded => _current.Unloaded;
+
+        /// <summary>SimBrief-pinned marker (arrival/alternate) — distinct from every status hue.</summary>
+        public static Color Pinned => _current.Pinned;
 
         public static Color Accent => _current.Warming;
 

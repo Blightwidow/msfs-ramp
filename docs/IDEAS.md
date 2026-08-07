@@ -142,6 +142,31 @@ loading screen, so re-reading is pure waste.
 - **Reset per flight** via a new `SimConnectClient.SimRunningChanged` event (fires on the camera-state
   transition); a fresh flight re-arms every airport.
 
+### SimBrief integration (implemented — alt E)
+`SimBriefUserId` (numeric Pilot ID) added to config + Settings panel. On launch and on each
+flight-start transition (`SimRunningChanged == true`), `Engine.RefreshSimBrief` fetches the latest
+OFP on a background thread and pins the endpoint ICAOs.
+
+- **Fetch/parse**: `SimBriefClient` hits the public XML fetcher
+  (`xml.fetcher.php?userid=<id>`) and reads `destination/icao_code` + `alternate/icao_code` with the
+  built-in `System.Xml.Linq` — **no JSON dependency added** (keeps the net48 zero-extra-deps stance).
+  TLS 1.2 forced (net48 default omits it). 10 s timeout. Every failure (no net, bad ID, empty OFP)
+  logs and returns null → silent fall back to proximity warming.
+- **Arrival + alternate only, NOT departure** (differs from the alt E sketch): departure is where you
+  spawn, so the sim has already streamed it and the inner-radius logic suppresses it anyway — warming
+  it would be wasted I/O.
+- **"Regardless of distance, first"**: `Engine.OnPosition` short-circuits pinned ICAOs past the
+  inner/outer/release/visited gates and calls `Prefetcher.Observe(entry, distance, pinned: true)`.
+  A new `pinned` flag on `AirportState` makes `TakeClosestQueued` pick pinned packages before
+  proximity ones, so they claim the RAM budget first — effective priority without a separate budget.
+- **Still in-flight-gated**: pinned warming obeys the existing `IsSimRunning` gate, so it never
+  competes with the loading screen; the destination warms during cruise. On flight end the pin set is
+  cleared and re-fetched next flight (picks up a regenerated OFP). `Release` also clears the pin so a
+  changed plan across flights doesn't leave a stale pinned row.
+- **UI**: coral `Theme.Pinned` colour; a dot in the ICAO gutter, a `PINNED` counter, and pinned rows
+  sorted to the top.
+- Doc caveat corrected: the method is `Prefetcher.Observe(entry, distance)`, not `Enqueue`.
+
 ## Alternatives considered (not chosen yet)
 
 ### A. BGL-derived coordinates (drop the CSV)  — strongest future candidate
@@ -213,8 +238,9 @@ linking fragile. Not pursued.
 - [ ] **Flight-plan aware prefetch** — read active flight plan (dep/enroute/arr), warm along route.
       (Scope was deferred; v1 is approach-only.)
 - [ ] **Departure airport warm at sim start** — smooth first taxi/takeoff.
-- [ ] **SimBrief integration** (alt E) — `SimBriefUserId` in settings; fetch latest OFP at launch,
-      warm departure + destination + alternate immediately. Reuses PackageIndex + Prefetcher.
+- [x] **SimBrief integration** (alt E) — done. `SimBriefUserId` in settings; fetch latest OFP at
+      launch AND each flight start; pin **arrival + alternate** (NOT departure — you spawn there, the
+      sim already has it) and warm them first regardless of distance. See decision below.
 - [x] **Settings panel / GUI** — done in v1.2 (WinForms). SimBrief ID field still to add when alt E
       lands; everything else (radius, poll, RAM, paths, start-with-Windows, verbose) is editable.
 - [ ] **Adaptive OuterRadius** — scale trigger distance by package size ÷ measured HDD read speed so
