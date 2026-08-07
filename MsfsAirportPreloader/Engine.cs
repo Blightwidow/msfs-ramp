@@ -18,7 +18,7 @@ namespace MsfsAirportPreloader
     internal enum IndexPhase { Building, Ready, Error }
 
     /// <summary>What's wrong when <see cref="IndexPhase.Error"/> — drives the recovery UI.</summary>
-    internal enum IndexErrorKind { None, AirportsCsv, PackageFolder }
+    internal enum IndexErrorKind { None, PackageFolder }
 
     /// <summary>
     /// Owns the whole pipeline (config, airport DB, package index, SimConnect, prefetcher) and
@@ -128,18 +128,9 @@ namespace MsfsAirportPreloader
                     ? Path.Combine(baseDirectory, "airports.csv")
                     : config.AirportsCsvPathOverride;
 
+                // airports.csv ships with the app, so an empty load is not treated as a user-facing
+                // error state; it just yields an empty index (the UI then shows "nothing in range").
                 _airportDatabase = AirportDatabase.Load(airportsCsvPath);
-                if (_airportDatabase.Count == 0)
-                {
-                    Log($"ERROR: no airports loaded from {airportsCsvPath}. Download OurAirports airports.csv.");
-                    Fail(IndexErrorKind.AirportsCsv,
-                        "Can't find your airport database",
-                        "RAMP needs airports.csv to know where each package sits. Indexing can run, " +
-                        "but without coordinates it can't tell which fields you're approaching.",
-                        airportsCsvPath);
-                    return;
-                }
-
                 Log($"Loaded {_airportDatabase.Count} airport coordinates.");
 
                 string installedPackagesPath = PackagePathResolver.Resolve(config.InstalledPackagesPathOverride, Log);

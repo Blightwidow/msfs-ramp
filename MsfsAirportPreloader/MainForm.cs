@@ -58,7 +58,6 @@ namespace MsfsAirportPreloader
         private readonly BufferedPanel _banner = new BufferedPanel();
         private RoundedButton _rescanButton;
         private RoundedButton _errorPrimary;
-        private RoundedButton _errorSecondary;
         private RoundedButton _bannerAction;
         private OverlayMode _overlayMode = OverlayMode.None;
         private BannerMode _bannerMode = BannerMode.None;
@@ -85,6 +84,12 @@ namespace MsfsAirportPreloader
         private int _countSkipped;
         private int _trackedCount;
         private bool _anyWarming;
+
+        // Toolbar glyph: grey when idle, else the state of the most recently added airport.
+        private Color _glyphColor = Theme.Unloaded;
+        private readonly System.Collections.Generic.HashSet<string> _seenAirportKeys =
+            new System.Collections.Generic.HashSet<string>();
+        private string _latestAirportKey;
 
         private Icon _trayIcon;
         private Color _trayColor = Color.Empty;
@@ -193,13 +198,6 @@ namespace MsfsAirportPreloader
 
             _overlay.BackColor = Theme.Window;
             _banner.BackColor = Theme.Window;
-            if (_errorSecondary != null)
-            {
-                _errorSecondary.BackColor = Theme.Window;
-                _errorSecondary.BorderColor = Theme.InputBorder;
-                _errorSecondary.HoverColor = Theme.RaisedHover;
-                _errorSecondary.ForeColor = Theme.TextMuted;
-            }
 
             Invalidate(true);
             _toolbar.Invalidate();
@@ -249,6 +247,7 @@ namespace MsfsAirportPreloader
 
             _errorPrimary = new RoundedButton
             {
+                Text = "Open Settings",
                 Font = Theme.Sans(9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(0x1A, 0x12, 0x04),
                 BackColor = Theme.Skipped,
@@ -258,24 +257,9 @@ namespace MsfsAirportPreloader
                 TabStop = false,
                 Visible = false,
             };
-            _errorPrimary.Click += (_, __) => OnErrorPrimary();
-
-            _errorSecondary = new RoundedButton
-            {
-                Font = Theme.Sans(9.5f),
-                ForeColor = Theme.TextMuted,
-                BackColor = Theme.Window,
-                BorderColor = Theme.InputBorder,
-                HoverColor = Theme.RaisedHover,
-                Height = 36,
-                Width = 190,
-                TabStop = false,
-                Visible = false,
-            };
-            _errorSecondary.Click += (_, __) => OpenUrl("https://github.com/davidmegginson/ourairports-data");
+            _errorPrimary.Click += (_, __) => OpenSettings();
 
             _overlay.Controls.Add(_errorPrimary);
-            _overlay.Controls.Add(_errorSecondary);
             _overlay.Resize += (_, __) => LayoutOverlay();
         }
 
@@ -288,16 +272,7 @@ namespace MsfsAirportPreloader
 
             int centerX = _overlay.Width / 2;
             int y = _overlay.Height / 2 + 52;
-            if (_errorSecondary.Visible)
-            {
-                int total = _errorPrimary.Width + 10 + _errorSecondary.Width;
-                _errorPrimary.SetBounds(centerX - total / 2, y, _errorPrimary.Width, _errorPrimary.Height);
-                _errorSecondary.SetBounds(_errorPrimary.Right + 10, y, _errorSecondary.Width, _errorSecondary.Height);
-            }
-            else
-            {
-                _errorPrimary.SetBounds(centerX - _errorPrimary.Width / 2, y, _errorPrimary.Width, _errorPrimary.Height);
-            }
+            _errorPrimary.SetBounds(centerX - _errorPrimary.Width / 2, y, _errorPrimary.Width, _errorPrimary.Height);
         }
 
         private void UpdateStateChrome(bool listEmpty)
@@ -360,16 +335,12 @@ namespace MsfsAirportPreloader
 
             if (mode == OverlayMode.Error)
             {
-                bool csv = _engine.ErrorKind == IndexErrorKind.AirportsCsv;
-                _errorPrimary.Text = csv ? "Locate airports.csv…" : "Open Settings";
                 _errorPrimary.Visible = true;
-                _errorSecondary.Visible = csv;
                 LayoutOverlay();
             }
             else
             {
                 _errorPrimary.Visible = false;
-                _errorSecondary.Visible = false;
             }
 
             _overlay.Visible = mode != OverlayMode.None;
@@ -589,37 +560,6 @@ namespace MsfsAirportPreloader
             _statsStrip.Invalidate();
         }
 
-        private void OnErrorPrimary()
-        {
-            if (_engine.ErrorKind == IndexErrorKind.AirportsCsv)
-            {
-                using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*" };
-                if (dialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    Config updated = _engine.CurrentConfig.Clone();
-                    updated.AirportsCsvPathOverride = dialog.FileName;
-                    updated.Save(_iniPath);
-                    _engine.ApplyConfig(updated, rescanPackages: true);
-                }
-            }
-            else
-            {
-                OpenSettings();
-            }
-        }
-
-        private static void OpenUrl(string url)
-        {
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
-            }
-            catch
-            {
-                // no browser available — nothing else to do
-            }
-        }
-
         private static Color Blend(Color a, Color b, float t)
             => Color.FromArgb(
                 (int)(a.R + (b.R - a.R) * t),
@@ -683,8 +623,8 @@ namespace MsfsAirportPreloader
                 g.DrawLine(pen, 0, _toolbar.Height - 1, _toolbar.Width, _toolbar.Height - 1);
             }
 
-            // Logo tile + wordmark.
-            Theme.DrawLogo(g, new RectangleF(14, 12, 20, 20), Theme.RaisedHover, Theme.Accent, Theme.Border);
+            // Logo tile + wordmark. The bar takes the current glyph state colour (grey when idle).
+            Theme.DrawLogo(g, new RectangleF(14, 12, 20, 20), Theme.RaisedHover, _glyphColor, Theme.Border);
             TextRenderer.DrawText(g, "RAMP", Theme.Mono(9.5f, FontStyle.Bold),
                 new Point(44, 15), Theme.Text, TextFormatFlags.NoPadding);
 
@@ -1032,12 +972,46 @@ namespace MsfsAirportPreloader
             TextRenderer.DrawText(g, "|", font, new Point(sep, 8), Theme.Border, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, tracked, font, new Point(sep + 12, 8), Theme.TextFaint, TextFormatFlags.NoPadding);
 
-            if (_engine.IsSimRunning)
+            (string status, Color color) = FooterStatus();
+            if (!string.IsNullOrEmpty(status))
             {
-                string live = "warming active";
-                int right = _statusBar.Width - 16 - TextRenderer.MeasureText(live, font).Width;
-                TextRenderer.DrawText(g, live, font, new Point(right, 8), Theme.Loaded, TextFormatFlags.NoPadding);
+                int right = _statusBar.Width - 16 - TextRenderer.MeasureText(status, font).Width;
+                TextRenderer.DrawText(g, status, font, new Point(right, 8), color, TextFormatFlags.NoPadding);
             }
+        }
+
+        /// <summary>Right-aligned footer readout — one short phrase describing the current state.</summary>
+        private (string, Color) FooterStatus()
+        {
+            switch (_engine.Phase)
+            {
+                case IndexPhase.Building:
+                    return ("scanning packages", Theme.Skipped);
+                case IndexPhase.Error:
+                    return ("needs attention", Theme.Skipped);
+            }
+
+            if (!_engine.IsSimConnected)
+            {
+                return ("MSFS not detected", Theme.TextFaint);
+            }
+
+            if (!_engine.IsSimRunning)
+            {
+                return ("paused in menu", Theme.Queued);
+            }
+
+            if (_countSkipped > 0)
+            {
+                return ("budget reached", Theme.Skipped);
+            }
+
+            if (_countWarming > 0)
+            {
+                return ("warming active", Theme.Loaded);
+            }
+
+            return ("standing by", Theme.Loaded);
         }
 
         // --- Log panel ---------------------------------------------------------------------
@@ -1203,6 +1177,7 @@ namespace MsfsAirportPreloader
             _list.EndUpdate();
 
             RecomputeStats(states);
+            UpdateGlyphColor(states);
             UpdateStateChrome(states.Count == 0);
 
             _statsStrip.Invalidate();
@@ -1274,6 +1249,47 @@ namespace MsfsAirportPreloader
             _cacheUsedBytes = _loadedBytes + _warmingBytes;
             _cacheBudgetBytes = _engine.CurrentConfig.RamBudgetMegabytes * 1024L * 1024L;
             _anyWarming = _countWarming > 0;
+        }
+
+        /// <summary>
+        /// Track the most recently added airport (first time its key appears) and colour the
+        /// toolbar glyph by that airport's current state — grey whenever nothing is active.
+        /// </summary>
+        private void UpdateGlyphColor(List<AirportState> states)
+        {
+            string newest = null;
+            double nearest = double.MaxValue;
+            foreach (AirportState state in states)
+            {
+                string key = state.Icao + "|" + state.PackageName;
+                if (_seenAirportKeys.Add(key) && state.DistanceNauticalMiles < nearest)
+                {
+                    nearest = state.DistanceNauticalMiles;
+                    newest = key;
+                }
+            }
+
+            if (newest != null)
+            {
+                _latestAirportKey = newest;
+            }
+
+            PrefetchState? latest = null;
+            if (_latestAirportKey != null)
+            {
+                foreach (AirportState state in states)
+                {
+                    if (state.Icao + "|" + state.PackageName == _latestAirportKey)
+                    {
+                        latest = state.State;
+                        break;
+                    }
+                }
+            }
+
+            _glyphColor = _engine.IsSimRunning && latest.HasValue && latest.Value != PrefetchState.OutOfRange
+                ? Theme.StateColor(latest.Value)
+                : Theme.Unloaded;
         }
 
         private static float Clamp01(float value) => value < 0f ? 0f : value > 1f ? 1f : value;
