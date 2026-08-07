@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+<defs>
+  <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+    <path d="M64 0H0V64" fill="none" stroke="#101A24" stroke-width="1"/>
+  </pattern>
+  <pattern id="grid56" width="56" height="56" patternUnits="userSpaceOnUse">
+    <path d="M56 0H0V56" fill="none" stroke="#101A24" stroke-width="1"/>
+  </pattern>
+  <pattern id="grid50" width="50" height="50" patternUnits="userSpaceOnUse">
+    <path d="M50 0H0V50" fill="none" stroke="#101A24" stroke-width="1"/>
+  </pattern>
+  <radialGradient id="glow"><stop offset="0" stop-color="#3FC7F4" stop-opacity="0.13"/><stop offset="0.65" stop-color="#3FC7F4" stop-opacity="0"/></radialGradient>
+  <linearGradient id="rail" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#46D08A"/><stop offset="0.34" stop-color="#46D08A"/>
+    <stop offset="0.34" stop-color="#3FC7F4"/><stop offset="0.58" stop-color="#3FC7F4"/>
+    <stop offset="0.58" stop-color="#9B8CFA"/><stop offset="0.78" stop-color="#9B8CFA"/>
+    <stop offset="0.78" stop-color="#F0B429"/><stop offset="0.90" stop-color="#F0B429"/>
+    <stop offset="0.90" stop-color="#5C6E7E"/>
+  </linearGradient>
+  <linearGradient id="railH" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#46D08A"/><stop offset="0.34" stop-color="#46D08A"/>
+    <stop offset="0.34" stop-color="#3FC7F4"/><stop offset="0.58" stop-color="#3FC7F4"/>
+    <stop offset="0.58" stop-color="#9B8CFA"/><stop offset="0.78" stop-color="#9B8CFA"/>
+    <stop offset="0.78" stop-color="#F0B429"/><stop offset="0.90" stop-color="#F0B429"/>
+    <stop offset="0.90" stop-color="#5C6E7E"/>
+  </linearGradient>
+  <pattern id="stripe" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+    <rect width="14" height="14" fill="#3FC7F4"/>
+    <rect width="7" height="14" fill="#ffffff" opacity="0.30"/>
+  </pattern>
+</defs>
+<clipPath id="o3"><rect x="0" y="0" width="800" height="450" rx="10"/></clipPath>
+<g clip-path="url(#o3)">
+<rect x="0" y="0" width="800" height="450" fill="#0A1017" rx="10" stroke="#1F2E3C" stroke-width="1"/><rect x="0" y="0" width="800" height="450" fill="url(#grid50)" opacity="0.5"/>
+<circle cx="400" cy="100" r="260" fill="url(#glow)"/>
+<g><rect x="356.0" y="70" width="88" height="88" fill="#101B25" rx="20" stroke="#2C3E4F" stroke-width="1"/><clipPath id="lc35670"><rect x="356.0" y="70" width="88" height="88" rx="20"/></clipPath><g clip-path="url(#lc35670)"><g transform="translate(400.0,114.0) rotate(28)"><rect x="-7.0" y="-32.12" width="14" height="64.24" fill="#3FC7F4" rx="7.0"/></g></g><circle cx="367.88" cy="146.12" r="8.272" fill="#46D08A"/><circle cx="432.12" cy="81.88" r="8.272" fill="#46D08A"/></g>
+<text x="400.0" y="218" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="52" font-weight="600" fill="#E4EDF5" text-anchor="middle" letter-spacing="9">RAMP</text>
+<text x="400.0" y="246" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="400" fill="#3FC7F4" text-anchor="middle" letter-spacing="2.9">RAM AIRPORT PRELOADER</text>
+<text x="400.0" y="300" font-family="'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="400" fill="#93A9BB" text-anchor="middle">Warms your add-on airports into memory before you</text>
+<text x="400.0" y="324" font-family="'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="400" fill="#93A9BB" text-anchor="middle">get there. Set it once and forget it.</text>
+<text x="400.0" y="372" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#5C7A90" text-anchor="middle" letter-spacing="1.4">MSFS 2020      ·      WINDOWS 10 / 11      ·      v1.0</text>
+<rect x="0" y="445" width="800" height="5" fill="url(#railH)"/>
+</g></svg>

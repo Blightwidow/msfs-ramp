@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banners/social-preview.svg" alt="RAMP — RAM Airport Preloader" width="100%">
+</p>
+
 # RAMP — RAM Airport Preloader
 
 A background utility for **Microsoft Flight Simulator 2020** that eliminates the freeze/stutter

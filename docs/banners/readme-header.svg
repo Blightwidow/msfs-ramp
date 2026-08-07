@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="280" viewBox="0 0 1280 280">
+<defs>
+  <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+    <path d="M64 0H0V64" fill="none" stroke="#101A24" stroke-width="1"/>
+  </pattern>
+  <pattern id="grid56" width="56" height="56" patternUnits="userSpaceOnUse">
+    <path d="M56 0H0V56" fill="none" stroke="#101A24" stroke-width="1"/>
+  </pattern>
+  <pattern id="grid50" width="50" height="50" patternUnits="userSpaceOnUse">
+    <path d="M50 0H0V50" fill="none" stroke="#101A24" stroke-width="1"/>
+  </pattern>
+  <radialGradient id="glow"><stop offset="0" stop-color="#3FC7F4" stop-opacity="0.13"/><stop offset="0.65" stop-color="#3FC7F4" stop-opacity="0"/></radialGradient>
+  <linearGradient id="rail" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#46D08A"/><stop offset="0.34" stop-color="#46D08A"/>
+    <stop offset="0.34" stop-color="#3FC7F4"/><stop offset="0.58" stop-color="#3FC7F4"/>
+    <stop offset="0.58" stop-color="#9B8CFA"/><stop offset="0.78" stop-color="#9B8CFA"/>
+    <stop offset="0.78" stop-color="#F0B429"/><stop offset="0.90" stop-color="#F0B429"/>
+    <stop offset="0.90" stop-color="#5C6E7E"/>
+  </linearGradient>
+  <linearGradient id="railH" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#46D08A"/><stop offset="0.34" stop-color="#46D08A"/>
+    <stop offset="0.34" stop-color="#3FC7F4"/><stop offset="0.58" stop-color="#3FC7F4"/>
+    <stop offset="0.58" stop-color="#9B8CFA"/><stop offset="0.78" stop-color="#9B8CFA"/>
+    <stop offset="0.78" stop-color="#F0B429"/><stop offset="0.90" stop-color="#F0B429"/>
+    <stop offset="0.90" stop-color="#5C6E7E"/>
+  </linearGradient>
+  <pattern id="stripe" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+    <rect width="14" height="14" fill="#3FC7F4"/>
+    <rect width="7" height="14" fill="#ffffff" opacity="0.30"/>
+  </pattern>
+</defs>
+<clipPath id="o2"><rect x="0" y="0" width="1280" height="280" rx="10"/></clipPath>
+<g clip-path="url(#o2)">
+<rect x="0" y="0" width="1280" height="280" fill="#0A1017" rx="10" stroke="#1F2E3C" stroke-width="1"/><rect x="0" y="0" width="1280" height="280" fill="url(#grid56)" opacity="0.5"/>
+<rect x="0" y="0" width="5" height="280" fill="url(#rail)"/>
+<g><rect x="56" y="104" width="72" height="72" fill="#101B25" rx="17" stroke="#2C3E4F" stroke-width="1"/><clipPath id="lc56104"><rect x="56" y="104" width="72" height="72" rx="17"/></clipPath><g clip-path="url(#lc56104)"><g transform="translate(92.0,140.0) rotate(28)"><rect x="-6.0" y="-26.28" width="12" height="52.56" fill="#3FC7F4" rx="6.0"/></g></g><circle cx="65.72" cy="166.28" r="6.768" fill="#46D08A"/><circle cx="118.28" cy="113.72" r="6.768" fill="#46D08A"/></g>
+<text x="162" y="158" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="44" font-weight="600" fill="#E4EDF5" text-anchor="start" letter-spacing="7">RAMP</text>
+<text x="300" y="152" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="400" fill="#3FC7F4" text-anchor="start" letter-spacing="2.6">RAM AIRPORT PRELOADER</text>
+<text x="162" y="190" font-family="'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="400" fill="#93A9BB" text-anchor="start">Pre-loads MSFS add-on airports into RAM before you arrive. No more approach stutter.</text>
+<rect x="878" y="118" width="34" height="34" fill="#46D08A" rx="7"/>
+<text x="895" y="168" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" font-weight="400" fill="#5C7A90" text-anchor="middle" letter-spacing="0.9">LOADED</text>
+<rect x="952" y="118" width="34" height="34" fill="#3FC7F4" rx="7"/>
+<text x="969" y="168" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" font-weight="400" fill="#5C7A90" text-anchor="middle" letter-spacing="0.9">WARMING</text>
+<rect x="1026" y="118" width="34" height="34" fill="#9B8CFA" rx="7"/>
+<text x="1043" y="168" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" font-weight="400" fill="#5C7A90" text-anchor="middle" letter-spacing="0.9">QUEUED</text>
+<rect x="1100" y="118" width="34" height="34" fill="#F0B429" rx="7"/>
+<text x="1117" y="168" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" font-weight="400" fill="#5C7A90" text-anchor="middle" letter-spacing="0.9">SKIPPED</text>
+<rect x="1174" y="118" width="34" height="34" fill="#5C6E7E" rx="7"/>
+<text x="1191" y="168" font-family="'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="9" font-weight="400" fill="#5C7A90" text-anchor="middle" letter-spacing="0.9">UNLOADED</text>
+</g></svg>
