@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 
 namespace MsfsAirportPreloader
@@ -47,6 +48,15 @@ namespace MsfsAirportPreloader
         // already has them, so don't warm them again (departure on climb-out, touch-and-go). Cleared
         // when the flight ends. Touched only on the SimConnect callback thread.
         private readonly HashSet<string> _visitedThisFlight = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // ICAOs from the latest SimBrief OFP (arrival + alternate) to warm first, regardless of
+        // distance. Populated by RefreshSimBrief on launch and each flight start; read on the
+        // SimConnect callback thread in OnPosition. Volatile ref swap keeps that read lock-free.
+        private volatile HashSet<string> _pinnedIcaos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Bumped on every RefreshSimBrief call so a slow older fetch can't overwrite a newer one's
+        // pins (e.g. the launch fetch landing after the user edits the Pilot ID).
+        private int _simBriefFetchGeneration;
 
         // UTC ticks of the last position poll that actually swept the airport list (i.e. passed the
         // in-flight gate). Written on the SimConnect callback thread, read by the UI — via long so
@@ -113,9 +123,15 @@ namespace MsfsAirportPreloader
                 Log(connected ? "Connected to MSFS." : "Disconnected from MSFS.");
             _simConnect.SimRunningChanged += running =>
             {
-                if (!running)
+                if (running)
+                {
+                    // Start of a flight (menu → aircraft): pull the latest OFP and pin its endpoints.
+                    RefreshSimBrief();
+                }
+                else
                 {
                     _visitedThisFlight.Clear(); // new flight re-arms warming for every airport
+                    _pinnedIcaos = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // re-fetched next flight
                 }
             };
 
@@ -124,6 +140,64 @@ namespace MsfsAirportPreloader
             _connectionThread.Start();
 
             BuildIndexAsync();
+
+            // On launch: fetch once up front so the endpoints are pinned before the first flight.
+            RefreshSimBrief();
+        }
+
+        /// <summary>
+        /// Fetch the latest SimBrief OFP (if a Pilot ID is configured) on a background thread and
+        /// pin its arrival + alternate ICAOs. Blank ID clears any existing pins. Never throws.
+        /// </summary>
+        private void RefreshSimBrief()
+        {
+            // Claim a generation up front so any older in-flight fetch becomes stale immediately —
+            // including the blank-ID clear below, which must also win over a pending fetch.
+            int generation = Interlocked.Increment(ref _simBriefFetchGeneration);
+
+            string userId;
+            lock (_configGate)
+            {
+                userId = _config.SimBriefUserId;
+            }
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                _pinnedIcaos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                return;
+            }
+
+            var thread = new Thread(() =>
+            {
+                SimBriefPlan plan = SimBriefClient.Fetch(userId, Log);
+                var pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (plan != null)
+                {
+                    if (!string.IsNullOrEmpty(plan.DestinationIcao)) pinned.Add(plan.DestinationIcao);
+                    if (!string.IsNullOrEmpty(plan.AlternateIcao)) pinned.Add(plan.AlternateIcao);
+                }
+
+                // A newer refresh started while we were fetching — discard this now-stale result.
+                if (Volatile.Read(ref _simBriefFetchGeneration) != generation)
+                {
+                    return;
+                }
+
+                _pinnedIcaos = pinned;
+                if (pinned.Count > 0)
+                {
+                    Log($"SimBrief: pinned {DescribePlan(plan)} — warming first, regardless of distance.");
+                }
+            })
+            { IsBackground = true, Name = "SimBriefFetch" };
+            thread.Start();
+        }
+
+        private static string DescribePlan(SimBriefPlan plan)
+        {
+            string destination = string.IsNullOrEmpty(plan.DestinationIcao) ? null : $"{plan.DestinationIcao} (arrival)";
+            string alternate = string.IsNullOrEmpty(plan.AlternateIcao) ? null : $"{plan.AlternateIcao} (alternate)";
+            return string.Join(", ", new[] { destination, alternate }.Where(part => part != null));
         }
 
         private void ConnectionLoop()
@@ -257,6 +331,7 @@ namespace MsfsAirportPreloader
 
             double releaseRadius = outerRadius + ReleaseMarginNauticalMiles;
             List<PrefetchTarget> targets = _targets;
+            HashSet<string> pinnedIcaos = _pinnedIcaos;
 
             foreach (PrefetchTarget target in targets)
             {
@@ -270,6 +345,15 @@ namespace MsfsAirportPreloader
                     // Too close — the sim has already streamed this airport (e.g. you spawned here).
                     // Remember it for the rest of the flight so we don't re-warm on climb-out.
                     _visitedThisFlight.Add(key);
+                    continue;
+                }
+
+                if (pinnedIcaos.Contains(target.Entry.Icao))
+                {
+                    // SimBrief arrival/alternate: warm regardless of distance, ahead of proximity
+                    // packages. Bypass the outer-radius gate, the release hysteresis and the
+                    // visited-this-flight suppression — this is your destination, keep it warm.
+                    _prefetcher.Observe(target.Entry, distance, pinned: true);
                     continue;
                 }
 
@@ -307,8 +391,10 @@ namespace MsfsAirportPreloader
         /// <summary>Apply edited settings. Rebuilds the index if paths changed; warm state resets.</summary>
         public void ApplyConfig(Config newConfig, bool rescanPackages)
         {
+            string previousSimBriefId;
             lock (_configGate)
             {
+                previousSimBriefId = _config.SimBriefUserId;
                 _config = newConfig;
             }
 
@@ -320,6 +406,12 @@ namespace MsfsAirportPreloader
             else
             {
                 Log("Settings applied.");
+            }
+
+            // Re-pull the OFP when the Pilot ID changed (including cleared → pins removed).
+            if (!string.Equals(previousSimBriefId, newConfig.SimBriefUserId, StringComparison.Ordinal))
+            {
+                RefreshSimBrief();
             }
         }
 

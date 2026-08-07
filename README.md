@@ -61,6 +61,15 @@ and connects/reconnects automatically each time the sim starts.
 Warming only runs once the sim reports you're **in a flight** (SimConnect `CAMERA STATE`) — never
 during the loading screen or menus, so it never competes with MSFS's own load for the disk.
 
+### SimBrief integration (optional)
+
+Enter your numeric **SimBrief Pilot ID** in Settings and RAMP fetches your latest OFP on launch and
+at every flight start (menu → aircraft). It **pins the arrival and alternate airports** and warms
+them **first, regardless of distance** — so your destination's scenery warms during cruise headroom
+instead of racing the 60→25 NM window on approach. Pinned airports show a coral dot in the list and
+a `PINNED` counter. If there's no internet or no OFP, RAMP simply falls back to proximity warming.
+Departure isn't warmed: you spawn there, so the sim has already streamed it. Blank ID = feature off.
+
 ## Build
 
 > **Windows only.** SimConnect and the page-cache warming calls are Windows APIs; there is no
@@ -150,6 +159,7 @@ MsfsAirportPreloader/
   ThemedControls.cs        toggle, slider, rounded/caption buttons, dark menu renderer
   Engine.cs                orchestrates everything on background threads
   SimConnectClient.cs      SimConnect connection w/ auto-reconnect, position + camera at 1 Hz
+  SimBriefClient.cs        fetch latest SimBrief OFP, extract arrival + alternate ICAOs
   PackagePathResolver.cs   find InstalledPackagesPath from UserCfg.opt
   PackageIndex.cs          scan packages, map ICAO → on-disk files (via layout.json)
   AirportDatabase.cs       OurAirports CSV → ICAO coordinates

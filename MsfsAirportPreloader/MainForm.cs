@@ -82,6 +82,7 @@ namespace MsfsAirportPreloader
         private int _countWarming;
         private int _countQueued;
         private int _countSkipped;
+        private int _countPinned;
         private int _trackedCount;
         private bool _anyWarming;
 
@@ -751,7 +752,7 @@ namespace MsfsAirportPreloader
                 g.DrawLine(pen, 0, _statsStrip.Height - 1, _statsStrip.Width, _statsStrip.Height - 1);
             }
 
-            const int countersWidth = 300;
+            const int countersWidth = 375;
             int meterLeft = 16;
             int meterRight = _statsStrip.Width - countersWidth - 24;
             if (meterRight < meterLeft + 120)
@@ -825,6 +826,7 @@ namespace MsfsAirportPreloader
                 ("WARMING", _countWarming, Theme.Warming),
                 ("QUEUED", _countQueued, Theme.Queued),
                 ("SKIPPED", _countSkipped, Theme.Skipped),
+                ("PINNED", _countPinned, Theme.Pinned),
             };
 
             int cellWidth = width / counters.Length;
@@ -936,6 +938,13 @@ namespace MsfsAirportPreloader
             using (var brush = new SolidBrush(railColor))
             {
                 g.FillRectangle(brush, row.Left, row.Top, 3, row.Height);
+            }
+
+            // SimBrief-pinned (arrival/alternate): a distinct dot in the gutter left of the ICAO.
+            if (state.IsPinned)
+            {
+                Color pinColor = _dimList ? Blend(Theme.Pinned, Theme.Window, 0.5f) : Theme.Pinned;
+                Theme.DrawDot(g, row.Left + 9f, row.Top + row.Height / 2f, 3.5f, pinColor);
             }
 
             bool dim = state.State == PrefetchState.OutOfRange;
@@ -1404,6 +1413,12 @@ namespace MsfsAirportPreloader
             List<AirportState> states = _engine.Snapshot();
             states.Sort((a, b) =>
             {
+                // SimBrief-pinned airports (your arrival/alternate) float to the top.
+                if (a.IsPinned != b.IsPinned)
+                {
+                    return a.IsPinned ? -1 : 1;
+                }
+
                 int byState = StateRank(a.State).CompareTo(StateRank(b.State));
                 return byState != 0 ? byState : a.DistanceNauticalMiles.CompareTo(b.DistanceNauticalMiles);
             });
@@ -1463,12 +1478,17 @@ namespace MsfsAirportPreloader
 
         private void RecomputeStats(List<AirportState> states)
         {
-            _countLoaded = _countWarming = _countQueued = _countSkipped = 0;
+            _countLoaded = _countWarming = _countQueued = _countSkipped = _countPinned = 0;
             _trackedCount = 0;
             _loadedBytes = _warmingBytes = 0;
 
             foreach (AirportState state in states)
             {
+                if (state.IsPinned)
+                {
+                    _countPinned++;
+                }
+
                 switch (state.State)
                 {
                     case PrefetchState.Loaded:

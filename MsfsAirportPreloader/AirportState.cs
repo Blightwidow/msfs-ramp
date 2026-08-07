@@ -28,6 +28,10 @@ namespace MsfsAirportPreloader
         public PrefetchState State { get; set; }
         public long WarmedBytes { get; set; }
 
+        /// <summary>Force-warmed from a SimBrief flight plan (arrival/alternate) — warmed first,
+        /// regardless of distance. Drives the "pinned" marker in the UI.</summary>
+        public bool IsPinned { get; set; }
+
         public AirportState Clone() => (AirportState)MemberwiseClone();
     }
 }

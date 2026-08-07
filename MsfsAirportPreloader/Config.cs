@@ -42,6 +42,13 @@ namespace MsfsAirportPreloader
         /// <summary>Path to the OurAirports-format airports.csv. Empty = airports.csv beside exe.</summary>
         public string AirportsCsvPathOverride { get; set; } = "";
 
+        /// <summary>
+        /// SimBrief Pilot ID (numeric). When set, RAMP fetches your latest OFP on launch and at
+        /// each flight start, and warms the arrival + alternate airports first, regardless of
+        /// distance. Blank = feature off.
+        /// </summary>
+        public string SimBriefUserId { get; set; } = "";
+
         /// <summary>Launch the app automatically at Windows login (registry Run key).</summary>
         public bool StartWithWindows { get; set; } = false;
 
@@ -87,6 +94,7 @@ namespace MsfsAirportPreloader
             config.RamBudgetMegabytes = (long)ReadDouble(values, "RamBudgetMegabytes", config.RamBudgetMegabytes);
             config.InstalledPackagesPathOverride = ReadString(values, "InstalledPackagesPath", config.InstalledPackagesPathOverride);
             config.AirportsCsvPathOverride = ReadString(values, "AirportsCsvPath", config.AirportsCsvPathOverride);
+            config.SimBriefUserId = ReadString(values, "SimBriefUserId", config.SimBriefUserId);
             config.StartWithWindows = ReadBool(values, "StartWithWindows", config.StartWithWindows);
             config.Verbose = ReadBool(values, "Verbose", config.Verbose);
             config.Appearance = ReadEnum(values, "Theme", config.Appearance);
@@ -116,6 +124,10 @@ namespace MsfsAirportPreloader
             builder.AppendLine();
             builder.AppendLine("# OurAirports airports.csv path. Blank = airports.csv beside the exe.");
             builder.AppendLine($"AirportsCsvPath = {AirportsCsvPathOverride}");
+            builder.AppendLine();
+            builder.AppendLine("# SimBrief Pilot ID (numeric). Set it and RAMP warms your OFP's arrival +");
+            builder.AppendLine("# alternate first, regardless of distance. Blank = off.");
+            builder.AppendLine($"SimBriefUserId = {SimBriefUserId}");
             builder.AppendLine();
             builder.AppendLine($"StartWithWindows = {(StartWithWindows ? "true" : "false")}");
             builder.AppendLine($"Verbose = {(Verbose ? "true" : "false")}");
