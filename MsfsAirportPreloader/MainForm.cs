@@ -216,7 +216,7 @@ namespace MsfsAirportPreloader
         private void BuildBanner()
         {
             _banner.Dock = DockStyle.Top;
-            _banner.Height = 48;
+            _banner.Height = 58;
             _banner.Visible = false;
             _banner.BackColor = Theme.Window;
             _banner.Paint += PaintBanner;
@@ -417,13 +417,16 @@ namespace MsfsAirportPreloader
             Color accent = _bannerMode == BannerMode.Budget ? Theme.Skipped : Theme.Queued;
 
             g.Clear(Theme.Window);
-            var card = new RectangleF(14, 7, _banner.Width - 28, _banner.Height - 12);
+            var card = new RectangleF(14, 8, _banner.Width - 28, _banner.Height - 16);
             Theme.FillRoundedRect(g, card, 7f, Color.FromArgb(20, accent));
             Theme.DrawRoundedBorder(g, card, 7f, Color.FromArgb(90, accent));
 
+            // Square status dot, vertically centred in the card.
+            float dotSize = 9f;
+            float dotX = card.X + 14;
             using (var dot = new SolidBrush(accent))
             {
-                g.FillRectangle(dot, 26, _banner.Height / 2 - 4, 8, 8);
+                g.FillRectangle(dot, dotX, card.Y + (card.Height - dotSize) / 2f, dotSize, dotSize);
             }
 
             string title, detail;
@@ -438,12 +441,21 @@ namespace MsfsAirportPreloader
                 detail = "Reading now would slow the sim's load. RAMP resumes once you're airborne.";
             }
 
-            TextRenderer.DrawText(g, title, Theme.Sans(9.5f, FontStyle.Bold), new Point(44, 8), Theme.Text, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(g, detail, Theme.Sans(8.5f), new Point(44, 26), Theme.TextMuted, TextFormatFlags.NoPadding);
+            // Right edge of the text column: clear of the HOLDING chip / Raise action.
+            int textLeft = (int)(dotX + dotSize + 12);
+            int rightReserve = _bannerMode == BannerMode.Menu ? 100 : (_bannerAction.Width + 24);
+            int textWidth = (int)card.Right - rightReserve - textLeft;
+            // Two lines, centred as a block within the card.
+            var titleRect = new Rectangle(textLeft, (int)card.Y + 9, textWidth, 20);
+            var detailRect = new Rectangle(textLeft, (int)card.Y + 28, textWidth, 16);
+            TextRenderer.DrawText(g, title, Theme.Sans(9.5f, FontStyle.Bold), titleRect, Theme.Text,
+                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, detail, Theme.Sans(8.5f), detailRect, Theme.TextMuted,
+                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
 
             if (_bannerMode == BannerMode.Menu)
             {
-                var chip = new RectangleF(_banner.Width - 96, _banner.Height / 2f - 11, 82, 22);
+                var chip = new RectangleF(card.Right - 96, card.Y + (card.Height - 22) / 2f, 82, 22);
                 Theme.DrawChip(g, chip, "HOLDING", accent, Theme.Mono(8f, FontStyle.Bold));
             }
         }
