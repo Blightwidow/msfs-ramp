@@ -1053,12 +1053,41 @@ namespace MsfsAirportPreloader
             TextRenderer.DrawText(g, "|", font, new Point(sep, 8), Theme.Border, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, tracked, font, new Point(sep + 12, 8), Theme.TextFaint, TextFormatFlags.NoPadding);
 
+            // Right-side cluster, laid out right-to-left: state phrase, then the last-sweep readout.
+            int cursor = _statusBar.Width - 16;
+
             (string status, Color color) = FooterStatus();
             if (!string.IsNullOrEmpty(status))
             {
-                int right = _statusBar.Width - 16 - TextRenderer.MeasureText(status, font).Width;
-                TextRenderer.DrawText(g, status, font, new Point(right, 8), color, TextFormatFlags.NoPadding);
+                cursor -= TextRenderer.MeasureText(status, font).Width;
+                TextRenderer.DrawText(g, status, font, new Point(cursor, 8), color, TextFormatFlags.NoPadding);
             }
+
+            (string sweep, Color sweepColor) = SweepReadout();
+            if (!string.IsNullOrEmpty(sweep))
+            {
+                cursor -= 12 + TextRenderer.MeasureText("|", font).Width;
+                TextRenderer.DrawText(g, "|", font, new Point(cursor, 8), Theme.Border, TextFormatFlags.NoPadding);
+                cursor -= 12 + TextRenderer.MeasureText(sweep, font).Width;
+                TextRenderer.DrawText(g, sweep, font, new Point(cursor, 8), sweepColor, TextFormatFlags.NoPadding);
+            }
+        }
+
+        /// <summary>"last sweep" footer readout — how long ago the position poll last swept the list.
+        /// Green when fresh (polling live), amber when stale, faint when no sweep has run yet.</summary>
+        private (string, Color) SweepReadout()
+        {
+            DateTime? lastSweep = _engine.LastSweepUtc;
+            if (lastSweep == null)
+            {
+                return ("no sweep yet", Theme.TextFaint);
+            }
+
+            int seconds = (int)Math.Max(0, (DateTime.UtcNow - lastSweep.Value).TotalSeconds);
+            string text = seconds <= 1 ? "swept just now" : $"swept {seconds}s ago";
+            // Sweeps run ~1 Hz in flight; more than a few seconds means polling has stalled or paused.
+            Color color = seconds <= 3 ? Theme.Loaded : Theme.Skipped;
+            return (text, color);
         }
 
         /// <summary>Right-aligned footer readout — one short phrase describing the current state.</summary>
