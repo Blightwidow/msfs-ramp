@@ -1,4 +1,4 @@
-# MSFS Airport Preloader — Ideas & Decision Log
+# RAMP (RAM Airport Preloader) — Ideas & Decision Log
 
 Running log of design decisions, alternatives considered, and future work.
 Append here rather than losing context between sessions.
@@ -31,7 +31,8 @@ SimConnect (aircraft lat/lon @1Hz)
 ```
 
 Components: `Program`, `SimConnectClient`, `PackagePathResolver`, `PackageIndex`,
-`AirportDatabase`, `Prefetcher`, `Geo`, `Config`.
+`AirportDatabase`, `Prefetcher`, `Geo`, `Config`. UI layer (v1.4): `MainForm`, `SettingsForm`,
+`AboutForm`, `Theme`, `ThemedControls`.
 
 ## Decisions & rationale
 
@@ -87,16 +88,47 @@ Turned the console app into a WinForms tray application (`Engine` orchestrator +
 - **Settings panel** edits all ini keys, writes back via `Config.Save`, applies live (radius/poll),
   rescans on path change, and toggles a HKCU Run key (`StartupRegistry`) for start-with-Windows.
 
-### Gate warming on sim-running state (implemented v1.3)
+### Gate warming on sim-running state (implemented v1.3, revised v1.4)
 Observed prefetch firing during the **loading screen**, competing with the sim's own disk reads and
-slowing the load. Fix: subscribe to the SimConnect `"Sim"` system event (1 = in flight, 0 =
-menu/loading) + seed via `RequestSystemState("Sim")`. `Engine.OnPosition` now no-ops unless
-`IsSimRunning`. Background-I/O priority alone wasn't enough — a full stop during load is what the user
-wants. Also pauses warming when returning to menus; UI status shows In flight / menu-loading / waiting.
+slowing the load. `Engine.OnPosition` no-ops unless the sim reports you're in a flight; background-I/O
+priority alone wasn't enough — a full stop during load is what the user wants. Also pauses when
+returning to menus; UI shows In flight / in menu / waiting.
+- **v1.3:** subscribed to the SimConnect `"Sim"` system event. **Wrong signal** — `"Sim"` reads 1 in
+  the main menu too (the menu runs a live background world), so the header said "in flight" and
+  warming started during the menu→flight load.
+- **v1.4 fix:** gate on **`CAMERA STATE`** instead — in flight only when 2–10 (cockpit/external/
+  drone/showcase), excluding 11 (Waiting/menu) and 12 (World Map). Data request switched to a steady
+  1 Hz so the gate flips promptly on the transition.
 
 ### Background-I/O priority
 `THREAD_MODE_BACKGROUND_BEGIN` + `ThreadPriority.Lowest` + `FILE_FLAG_SEQUENTIAL_SCAN` so our reads
 yield to MSFS's own foreground I/O. RAM-budget capped to avoid evicting pages MSFS needs.
+
+### Rebrand + UI redesign (implemented v1.4 — from a design handoff)
+Rebranded **MSFS Airport Preloader → RAMP** (RAM Airport Preloader; also the aviation "ramp"). Built
+a design in Claude Design and implemented it faithfully in WinForms (owner-draw), staying on net48 —
+no WPF rewrite, so the SimConnect pipeline was untouched.
+- **Visual language** (`Theme`): dark instrument-panel palette + a full **light theme**, IBM Plex
+  type pair with system fallback, paint primitives (rounded rects, status chips, striped warming bar,
+  logo). **Theme setting**: System / Light / Dark (`Config.Appearance`), applied at startup and
+  live-reapplied to the window.
+- **Main window**: custom toolbar (logo glyph coloured by the latest airport's state), RAM **cache
+  meter** + LOADED/WARMING/QUEUED/SKIPPED counters, owner-drawn airport list (state rail, chip, live
+  warming bar), footer state readout.
+- **Seven states** driven off a new `Engine.Phase` (Building/Ready/Error): indexing takeover, in-menu
+  paused banner + dimmed list, nothing-nearby empty state, warming, budget-full amber banner with a
+  Raise-budget action, package-folder error takeover, tray.
+- **Custom window chrome**: no OS title bar; toolbar is the caption (drag + double-click maximise) with
+  in-app min/max/close. Native resize/snap/shadow kept via `WS_THICKFRAME`+`WS_CAPTION` and
+  `WM_NCCALCSIZE` (reclaims the whole top inset so no white bar).
+- **Tray** (design state 07): dark-rendered menu with a live status readout header, **Pause warming**
+  (real engine pause via `Prefetcher.Paused`), one **completion balloon** per flight, glyph recolours
+  to the dominant state.
+- **About** popup: free/open-source, repo link, OurAirports credit. **Banners** (`docs/banners/`,
+  SVG). Taskbar/window **icon** set to the RAMP glyph.
+- **Settings** reworked into labelled dark sections with a RAM slider and inline validation. The
+  **airports.csv path field was dropped** from the UI (the CSV ships with the app) — and with it the
+  "airport database not found" error state; the override key still exists in the ini for edge cases.
 
 ## Alternatives considered (not chosen yet)
 
@@ -177,6 +209,13 @@ linking fragile. Not pursued.
       warming always finishes before 25 NM.
 - [x] **Drop monotonic RAM budget** — done in v1.2: budget freed on `Release()` when flying away.
       (Could still add OS-LRU awareness / per-airport cap later.)
+- [x] **Rebrand to RAMP** — done v1.4.
+- [x] **Full UI redesign** — done v1.4 (dark instrument table, seven states, cache meter, banners).
+- [x] **Light / dark / system theme** — done v1.4 (`Config.Appearance`).
+- [x] **Pause warming** — done v1.4 (tray toggle; `Prefetcher.Paused`).
+- [x] **Custom dark window chrome + app icon** — done v1.4.
+- [x] **Completion balloon** — done v1.4 (one per flight; approximates "destination" as nearest
+      Loaded — see below for the heading-aware refinement).
 - [ ] **Force-warm on close** — at an inner radius (~25 NM) warm the destination even if budget hit.
 - [ ] **RAM budget live-apply** — currently needs restart (set in `Prefetcher` ctor); make mutable.
 - [ ] **Persist window size/position + column widths.**
@@ -194,4 +233,3 @@ linking fragile. Not pursued.
 - What's the real HDD sequential read rate → how much lead time (NM) does a 2 GB airport need?
 - Do MSFS facility APIs fire early enough to ever be viable for proximity? (Measure trigger radius.)
 - Best signal that a warm actually helped — frametime graph? loader thread wait? SimConnect can't see it.
-```
