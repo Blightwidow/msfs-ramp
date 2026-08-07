@@ -14,6 +14,12 @@ namespace MsfsAirportPreloader
         public double Longitude;
     }
 
+    /// <summary>Lifecycle of the one-time package/airport index that gates everything else.</summary>
+    internal enum IndexPhase { Building, Ready, Error }
+
+    /// <summary>What's wrong when <see cref="IndexPhase.Error"/> — drives the recovery UI.</summary>
+    internal enum IndexErrorKind { None, AirportsCsv, PackageFolder }
+
     /// <summary>
     /// Owns the whole pipeline (config, airport DB, package index, SimConnect, prefetcher) and
     /// runs it on a background thread independent of the sim. The UI observes it via Snapshot(),
@@ -47,7 +53,19 @@ namespace MsfsAirportPreloader
         public bool IsSimRunning => _simConnect?.IsSimRunning ?? false;
         public int IndexedAirportCount { get; private set; }
         public int IndexedPackageCount { get; private set; }
-        public bool Ready { get; private set; }
+
+        /// <summary>Index lifecycle for the UI's takeover states. Ready is the happy path.</summary>
+        public IndexPhase Phase { get; private set; } = IndexPhase.Building;
+        public bool Ready => Phase == IndexPhase.Ready;
+
+        // Populated when Phase == Error, so the window can name the problem and the path it tried.
+        public IndexErrorKind ErrorKind { get; private set; }
+        public string ErrorTitle { get; private set; }
+        public string ErrorDetail { get; private set; }
+        public string ErrorPath { get; private set; }
+
+        /// <summary>Folder being scanned — shown under the "indexing" spinner.</summary>
+        public string ScanRootPath { get; private set; }
 
         public void Start()
         {
@@ -95,7 +113,8 @@ namespace MsfsAirportPreloader
 
         private void BuildIndex()
         {
-            Ready = false;
+            Phase = IndexPhase.Building;
+            ErrorKind = IndexErrorKind.None;
             try
             {
                 Config config;
@@ -113,6 +132,11 @@ namespace MsfsAirportPreloader
                 if (_airportDatabase.Count == 0)
                 {
                     Log($"ERROR: no airports loaded from {airportsCsvPath}. Download OurAirports airports.csv.");
+                    Fail(IndexErrorKind.AirportsCsv,
+                        "Can't find your airport database",
+                        "RAMP needs airports.csv to know where each package sits. Indexing can run, " +
+                        "but without coordinates it can't tell which fields you're approaching.",
+                        airportsCsvPath);
                     return;
                 }
 
@@ -122,9 +146,15 @@ namespace MsfsAirportPreloader
                 if (installedPackagesPath == null || !Directory.Exists(installedPackagesPath))
                 {
                     Log("ERROR: could not locate MSFS InstalledPackagesPath. Set it in Settings.");
+                    Fail(IndexErrorKind.PackageFolder,
+                        "Can't find your MSFS packages",
+                        "RAMP couldn't locate the folder that holds Community and Official. " +
+                        "Set it in Settings and RAMP will scan it.",
+                        installedPackagesPath ?? "(auto-detect failed)");
                     return;
                 }
 
+                ScanRootPath = installedPackagesPath;
                 Log($"Scanning packages under: {installedPackagesPath} ...");
                 var packageIndex = PackageIndex.Build(installedPackagesPath, _airportDatabase, Log);
 
@@ -153,13 +183,23 @@ namespace MsfsAirportPreloader
                 _targets = targets;
                 IndexedPackageCount = packageIndex.PackageCount;
                 IndexedAirportCount = packageIndex.AirportCount;
-                Ready = true;
+                Phase = IndexPhase.Ready;
                 Log($"Indexed {packageIndex.PackageCount} scenery packages across {packageIndex.AirportCount} airports.");
             }
             catch (Exception ex)
             {
                 Log($"ERROR building index: {ex.Message}");
+                Fail(IndexErrorKind.PackageFolder, "Indexing failed", ex.Message, ScanRootPath ?? "");
             }
+        }
+
+        private void Fail(IndexErrorKind kind, string title, string detail, string path)
+        {
+            ErrorKind = kind;
+            ErrorTitle = title;
+            ErrorDetail = detail;
+            ErrorPath = path;
+            Phase = IndexPhase.Error;
         }
 
         private void OnPosition(AircraftPosition position)

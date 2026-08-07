@@ -53,6 +53,20 @@ namespace MsfsAirportPreloader
         private readonly TextBox _logBox = new TextBox();
         private Label _logHeader;
 
+        // Full-area takeover (indexing / error / empty) and the inline notice strip.
+        private readonly BufferedPanel _overlay = new BufferedPanel();
+        private readonly BufferedPanel _banner = new BufferedPanel();
+        private RoundedButton _rescanButton;
+        private RoundedButton _errorPrimary;
+        private RoundedButton _errorSecondary;
+        private RoundedButton _bannerAction;
+        private OverlayMode _overlayMode = OverlayMode.None;
+        private BannerMode _bannerMode = BannerMode.None;
+        private bool _dimList;
+
+        private enum OverlayMode { None, Indexing, Error, Empty }
+        private enum BannerMode { None, Menu, Budget }
+
         private readonly Timer _refreshTimer = new Timer();
         private readonly Timer _animTimer = new Timer();
         private readonly NotifyIcon _tray = new NotifyIcon();
@@ -92,14 +106,22 @@ namespace MsfsAirportPreloader
             _animTimer.Interval = 66;
             _animTimer.Tick += (_, __) =>
             {
-                if (!_anyWarming)
+                // Runs the warming stripe/meter pulse and the indexing spinner.
+                if (!_anyWarming && _overlayMode != OverlayMode.Indexing)
                 {
                     return;
                 }
 
                 _animFrame++;
-                _list.Invalidate();
-                _statsStrip.Invalidate();
+                if (_overlayMode == OverlayMode.Indexing)
+                {
+                    _overlay.Invalidate();
+                }
+                else
+                {
+                    _list.Invalidate();
+                    _statsStrip.Invalidate();
+                }
             };
             _animTimer.Start();
         }
@@ -120,16 +142,21 @@ namespace MsfsAirportPreloader
             BuildStatusBar();
             BuildLogPanel();
             BuildList();
+            BuildBanner();
+            BuildOverlay();
 
-            // Docked controls claim space in reverse z-order, so the Fill control (the list) must
-            // be added FIRST, then each edge band from innermost to outermost.
+            // Docked controls claim space in reverse z-order, so the Fill controls (list, then the
+            // overlay on top of it) go FIRST, then each edge band from innermost to outermost.
             Controls.Add(_list);
+            Controls.Add(_overlay);    // Fill, above the list; shown only for takeovers
             Controls.Add(_logPanel);   // Bottom, above the footer, hidden by default
             Controls.Add(_statusBar);  // Bottom, outermost
+            Controls.Add(_banner);     // Top, just above the list
             Controls.Add(_statsStrip); // Top, below the toolbar
             Controls.Add(_toolbar);    // Top, outermost
 
             ApplyTheme();
+            UpdateStateChrome(listEmpty: true); // show the indexing takeover from the first frame
         }
 
         /// <summary>Re-apply the active theme's colours to every owned control, then repaint.</summary>
@@ -164,13 +191,420 @@ namespace MsfsAirportPreloader
                 _logHeader.ForeColor = Theme.TextFaint;
             }
 
+            _overlay.BackColor = Theme.Window;
+            _banner.BackColor = Theme.Window;
+            if (_errorSecondary != null)
+            {
+                _errorSecondary.BackColor = Theme.Window;
+                _errorSecondary.BorderColor = Theme.InputBorder;
+                _errorSecondary.HoverColor = Theme.RaisedHover;
+                _errorSecondary.ForeColor = Theme.TextMuted;
+            }
+
             Invalidate(true);
             _toolbar.Invalidate();
             _statsStrip.Invalidate();
             _statusBar.Invalidate();
             _logPanel.Invalidate();
             _list.Invalidate();
+            _banner.Invalidate();
+            _overlay.Invalidate();
         }
+
+        // --- State chrome: takeover overlay + inline banner --------------------------------
+
+        private void BuildBanner()
+        {
+            _banner.Dock = DockStyle.Top;
+            _banner.Height = 48;
+            _banner.Visible = false;
+            _banner.BackColor = Theme.Window;
+            _banner.Paint += PaintBanner;
+
+            _bannerAction = new RoundedButton
+            {
+                Font = Theme.Sans(8.5f, FontStyle.Bold),
+                Height = 28,
+                Width = 108,
+                TabStop = false,
+                Visible = false,
+            };
+            _bannerAction.Click += (_, __) => RaiseBudget();
+            _banner.Controls.Add(_bannerAction);
+            _banner.Resize += (_, __) => LayoutBanner();
+        }
+
+        private void LayoutBanner()
+        {
+            _bannerAction.Left = _banner.Width - _bannerAction.Width - 14;
+            _bannerAction.Top = (_banner.Height - _bannerAction.Height) / 2;
+        }
+
+        private void BuildOverlay()
+        {
+            _overlay.Dock = DockStyle.Fill;
+            _overlay.Visible = false;
+            _overlay.BackColor = Theme.Window;
+            _overlay.Paint += PaintOverlay;
+
+            _errorPrimary = new RoundedButton
+            {
+                Font = Theme.Sans(9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(0x1A, 0x12, 0x04),
+                BackColor = Theme.Skipped,
+                BorderColor = Color.Empty,
+                Height = 36,
+                Width = 168,
+                TabStop = false,
+                Visible = false,
+            };
+            _errorPrimary.Click += (_, __) => OnErrorPrimary();
+
+            _errorSecondary = new RoundedButton
+            {
+                Font = Theme.Sans(9.5f),
+                ForeColor = Theme.TextMuted,
+                BackColor = Theme.Window,
+                BorderColor = Theme.InputBorder,
+                HoverColor = Theme.RaisedHover,
+                Height = 36,
+                Width = 190,
+                TabStop = false,
+                Visible = false,
+            };
+            _errorSecondary.Click += (_, __) => OpenUrl("https://github.com/davidmegginson/ourairports-data");
+
+            _overlay.Controls.Add(_errorPrimary);
+            _overlay.Controls.Add(_errorSecondary);
+            _overlay.Resize += (_, __) => LayoutOverlay();
+        }
+
+        private void LayoutOverlay()
+        {
+            if (_overlayMode != OverlayMode.Error)
+            {
+                return;
+            }
+
+            int centerX = _overlay.Width / 2;
+            int y = _overlay.Height / 2 + 52;
+            if (_errorSecondary.Visible)
+            {
+                int total = _errorPrimary.Width + 10 + _errorSecondary.Width;
+                _errorPrimary.SetBounds(centerX - total / 2, y, _errorPrimary.Width, _errorPrimary.Height);
+                _errorSecondary.SetBounds(_errorPrimary.Right + 10, y, _errorSecondary.Width, _errorSecondary.Height);
+            }
+            else
+            {
+                _errorPrimary.SetBounds(centerX - _errorPrimary.Width / 2, y, _errorPrimary.Width, _errorPrimary.Height);
+            }
+        }
+
+        private void UpdateStateChrome(bool listEmpty)
+        {
+            IndexPhase phase = _engine.Phase;
+            OverlayMode overlay;
+            var banner = BannerMode.None;
+            bool dim = false;
+            bool statsVisible = true;
+
+            if (phase == IndexPhase.Building)
+            {
+                overlay = OverlayMode.Indexing;
+                statsVisible = false;
+            }
+            else if (phase == IndexPhase.Error)
+            {
+                overlay = OverlayMode.Error;
+                statsVisible = false;
+            }
+            else
+            {
+                bool inFlight = _engine.IsSimRunning;
+                bool inMenu = _engine.IsSimConnected && !inFlight;
+                dim = inMenu;
+                if (inMenu)
+                {
+                    banner = BannerMode.Menu;
+                }
+                else if (inFlight && _countSkipped > 0)
+                {
+                    banner = BannerMode.Budget;
+                }
+
+                // In the menu the dimmed list carries the state; otherwise an empty list means
+                // there's nothing in range (or the sim is closed) — say so.
+                overlay = listEmpty && !inMenu ? OverlayMode.Empty : OverlayMode.None;
+            }
+
+            _rescanButton.Enabled = phase != IndexPhase.Building;
+            if (_statsStrip.Visible != statsVisible)
+            {
+                _statsStrip.Visible = statsVisible;
+            }
+
+            SetBannerMode(banner);
+            SetOverlayMode(overlay);
+
+            if (_dimList != dim)
+            {
+                _dimList = dim;
+                _list.Invalidate();
+            }
+        }
+
+        private void SetOverlayMode(OverlayMode mode)
+        {
+            bool changed = _overlayMode != mode;
+            _overlayMode = mode;
+
+            if (mode == OverlayMode.Error)
+            {
+                bool csv = _engine.ErrorKind == IndexErrorKind.AirportsCsv;
+                _errorPrimary.Text = csv ? "Locate airports.csv…" : "Open Settings";
+                _errorPrimary.Visible = true;
+                _errorSecondary.Visible = csv;
+                LayoutOverlay();
+            }
+            else
+            {
+                _errorPrimary.Visible = false;
+                _errorSecondary.Visible = false;
+            }
+
+            _overlay.Visible = mode != OverlayMode.None;
+            if (_overlay.Visible)
+            {
+                _overlay.BringToFront();
+            }
+
+            if (changed || _overlay.Visible)
+            {
+                _overlay.Invalidate();
+            }
+        }
+
+        private void SetBannerMode(BannerMode mode)
+        {
+            _bannerMode = mode;
+            _bannerAction.Visible = mode == BannerMode.Budget;
+            if (mode == BannerMode.Budget)
+            {
+                long nextGb = _engine.CurrentConfig.RamBudgetMegabytes / 1024 + 2;
+                _bannerAction.Text = $"Raise to {nextGb} GB";
+                _bannerAction.ForeColor = Color.FromArgb(0x1A, 0x12, 0x04);
+                _bannerAction.BackColor = Theme.Skipped;
+                _bannerAction.BorderColor = Color.Empty;
+                LayoutBanner();
+            }
+
+            bool show = mode != BannerMode.None;
+            if (_banner.Visible != show)
+            {
+                _banner.Visible = show;
+            }
+
+            if (show)
+            {
+                _banner.Invalidate();
+            }
+        }
+
+        private void PaintBanner(object sender, PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Color accent = _bannerMode == BannerMode.Budget ? Theme.Skipped : Theme.Queued;
+
+            g.Clear(Theme.Window);
+            var card = new RectangleF(14, 7, _banner.Width - 28, _banner.Height - 12);
+            Theme.FillRoundedRect(g, card, 7f, Color.FromArgb(20, accent));
+            Theme.DrawRoundedBorder(g, card, 7f, Color.FromArgb(90, accent));
+
+            using (var dot = new SolidBrush(accent))
+            {
+                g.FillRectangle(dot, 26, _banner.Height / 2 - 4, 8, 8);
+            }
+
+            string title, detail;
+            if (_bannerMode == BannerMode.Budget)
+            {
+                title = $"Budget reached — {_countSkipped} skipped";
+                detail = "Destination is loaded; skipped fields are alternates.";
+            }
+            else
+            {
+                title = "Warming paused — you're in the menu";
+                detail = "Reading now would slow the sim's load. RAMP resumes once you're airborne.";
+            }
+
+            TextRenderer.DrawText(g, title, Theme.Sans(9.5f, FontStyle.Bold), new Point(44, 8), Theme.Text, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, detail, Theme.Sans(8.5f), new Point(44, 26), Theme.TextMuted, TextFormatFlags.NoPadding);
+
+            if (_bannerMode == BannerMode.Menu)
+            {
+                var chip = new RectangleF(_banner.Width - 96, _banner.Height / 2f - 11, 82, 22);
+                Theme.DrawChip(g, chip, "HOLDING", accent, Theme.Mono(8f, FontStyle.Bold));
+            }
+        }
+
+        private void PaintOverlay(object sender, PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Theme.Window);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            int cx = _overlay.Width / 2;
+            int cy = _overlay.Height / 2;
+
+            if (_overlayMode == OverlayMode.Indexing)
+            {
+                DrawSpinner(g, cx, cy - 96, 30, Theme.Skipped);
+                DrawCentered(g, "Indexing your add-on airports", Theme.Sans(15f, FontStyle.Bold), Theme.Text, cx, cy - 44);
+                string root = string.IsNullOrEmpty(_engine.ScanRootPath) ? "your MSFS package folder" : _engine.ScanRootPath;
+                DrawCentered(g, $"One-time scan of {root}.", Theme.Sans(10f), Theme.TextMuted, cx, cy - 18);
+                DrawCentered(g, "RAMP starts warming the moment you're airborne.", Theme.Sans(10f), Theme.TextMuted, cx, cy);
+                // Indeterminate bar.
+                var track = new RectangleF(cx - 220, cy + 38, 440, 8);
+                Theme.FillRoundedRect(g, track, 4f, Theme.InputBg);
+                Theme.DrawRoundedBorder(g, track, 4f, Theme.Border);
+                float seg = 150, span = track.Width + seg;
+                float pos = (_animFrame * 7f) % span - seg;
+                var lit = RectangleF.Intersect(track, new RectangleF(track.X + pos, track.Y, seg, 8));
+                if (lit.Width > 0)
+                {
+                    Theme.FillRoundedRect(g, lit, 4f, Theme.Skipped);
+                }
+            }
+            else if (_overlayMode == OverlayMode.Error)
+            {
+                // Warning glyph.
+                var glyph = new RectangleF(cx - 28, cy - 150, 56, 56);
+                Theme.DrawRoundedBorder(g, glyph, 12f, Color.FromArgb(128, Theme.Skipped), 2f);
+                using (var bar = new SolidBrush(Theme.Skipped))
+                {
+                    g.FillRectangle(bar, cx - 2.5f, cy - 140, 5, 26);
+                }
+                DrawCentered(g, _engine.ErrorTitle ?? "Something needs attention", Theme.Sans(15f, FontStyle.Bold), Theme.Text, cx, cy - 78);
+                foreach ((string line, int i) in WrapLines(_engine.ErrorDetail ?? "", 64))
+                {
+                    DrawCentered(g, line, Theme.Sans(10f), Theme.TextMuted, cx, cy - 50 + i * 20);
+                }
+
+                if (!string.IsNullOrEmpty(_engine.ErrorPath))
+                {
+                    var box = new RectangleF(cx - 260, cy + 4, 520, 34);
+                    Theme.FillRoundedRect(g, box, 6f, Theme.Sunken);
+                    Theme.DrawRoundedBorder(g, box, 6f, Theme.Border);
+                    TextRenderer.DrawText(g, "EXPECTED", Theme.Mono(7.5f), new Rectangle((int)box.X + 12, (int)box.Y, 70, 34),
+                        Theme.TextFaint, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    TextRenderer.DrawText(g, _engine.ErrorPath, Theme.Mono(9f), new Rectangle((int)box.X + 82, (int)box.Y, (int)box.Width - 94, 34),
+                        Theme.Skipped, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+                }
+            }
+            else if (_overlayMode == OverlayMode.Empty)
+            {
+                bool connected = _engine.IsSimConnected;
+                using (var pen = new Pen(Theme.InputBorder) { DashStyle = DashStyle.Dash })
+                {
+                    g.DrawEllipse(pen, cx - 18, cy - 44, 36, 36);
+                }
+                Theme.DrawDot(g, cx, cy - 26, 3, Color.FromArgb(0x3E, 0x51, 0x63));
+                string head = connected ? "NO ADD-ON AIRPORTS IN RANGE" : "WAITING FOR MSFS";
+                DrawCentered(g, head, Theme.Mono(10.5f, FontStyle.Regular), Theme.TextFaint, cx, cy + 2);
+                string sub = connected
+                    ? $"Nothing within {_engine.CurrentConfig.OuterRadiusNauticalMiles:0} NM yet — RAMP will pick it up automatically."
+                    : "RAMP starts warming once the sim is running and you're airborne.";
+                DrawCentered(g, sub, Theme.Sans(10f), Theme.TextDim, cx, cy + 24);
+            }
+        }
+
+        private static void DrawCentered(Graphics g, string text, Font font, Color color, int cx, int y)
+        {
+            Size size = TextRenderer.MeasureText(g, text, font, Size.Empty, TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, text, font, new Point(cx - size.Width / 2, y), color, TextFormatFlags.NoPadding);
+        }
+
+        private void DrawSpinner(Graphics g, int cx, int cy, int radius, Color color)
+        {
+            var rect = new RectangleF(cx - radius, cy - radius, radius * 2, radius * 2);
+            using (var track = new Pen(Color.FromArgb(0x1D, 0x2A, 0x36), 3f))
+            {
+                g.DrawEllipse(track, rect);
+            }
+
+            using var pen = new Pen(color, 3f);
+            g.DrawArc(pen, rect, (_animFrame * 9) % 360, 90);
+        }
+
+        private static System.Collections.Generic.IEnumerable<(string, int)> WrapLines(string text, int width)
+        {
+            var words = text.Split(' ');
+            var line = new System.Text.StringBuilder();
+            int index = 0;
+            foreach (string word in words)
+            {
+                if (line.Length > 0 && line.Length + 1 + word.Length > width)
+                {
+                    yield return (line.ToString(), index++);
+                    line.Clear();
+                }
+
+                if (line.Length > 0) line.Append(' ');
+                line.Append(word);
+            }
+
+            if (line.Length > 0)
+            {
+                yield return (line.ToString(), index);
+            }
+        }
+
+        private void RaiseBudget()
+        {
+            Config updated = _engine.CurrentConfig.Clone();
+            updated.RamBudgetMegabytes += 2048;
+            updated.Save(_iniPath);
+            _engine.ApplyConfig(updated, rescanPackages: false);
+            _cacheBudgetBytes = updated.RamBudgetMegabytes * 1024L * 1024L;
+            _statsStrip.Invalidate();
+        }
+
+        private void OnErrorPrimary()
+        {
+            if (_engine.ErrorKind == IndexErrorKind.AirportsCsv)
+            {
+                using var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*" };
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    Config updated = _engine.CurrentConfig.Clone();
+                    updated.AirportsCsvPathOverride = dialog.FileName;
+                    updated.Save(_iniPath);
+                    _engine.ApplyConfig(updated, rescanPackages: true);
+                }
+            }
+            else
+            {
+                OpenSettings();
+            }
+        }
+
+        private static void OpenUrl(string url)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch
+            {
+                // no browser available — nothing else to do
+            }
+        }
+
+        private static Color Blend(Color a, Color b, float t)
+            => Color.FromArgb(
+                (int)(a.R + (b.R - a.R) * t),
+                (int)(a.G + (b.G - a.G) * t),
+                (int)(a.B + (b.B - a.B) * t));
 
         // --- Toolbar -----------------------------------------------------------------------
 
@@ -183,6 +617,7 @@ namespace MsfsAirportPreloader
 
             int left = 132; // clears the logo tile and the RAMP wordmark painted behind
             RoundedButton rescan = MakeToolButton("Rescan", ref left);
+            _rescanButton = rescan;
             rescan.Click += (_, __) => _engine.ApplyConfig(_engine.CurrentConfig, rescanPackages: true);
             RoundedButton log = MakeToolButton("Log", ref left);
             log.Click += (_, __) => ToggleLog();
@@ -461,7 +896,9 @@ namespace MsfsAirportPreloader
             }
 
             // 3 px state rail.
-            using (var brush = new SolidBrush(Theme.StateColor(state.State)))
+            Color railColor = Theme.StateColor(state.State);
+            if (_dimList) railColor = Blend(railColor, Theme.Window, 0.55f);
+            using (var brush = new SolidBrush(railColor))
             {
                 g.FillRectangle(brush, row.Left, row.Top, 3, row.Height);
             }
@@ -470,6 +907,13 @@ namespace MsfsAirportPreloader
             Color icaoColor = dim ? Color.FromArgb(0x6B, 0x81, 0x94) : Theme.Text;
             Color nameColor = dim ? Color.FromArgb(0x5F, 0x77, 0x8A) : Color.FromArgb(0xA9, 0xBE, 0xCE);
             Color warmedColor = state.State == PrefetchState.Loaded ? Theme.Text : Theme.TextDim;
+            if (_dimList)
+            {
+                // In the menu the whole list recedes (~45%) — it stays visible but clearly idle.
+                icaoColor = Blend(icaoColor, Theme.Window, 0.5f);
+                nameColor = Blend(nameColor, Theme.Window, 0.5f);
+                warmedColor = Blend(warmedColor, Theme.Window, 0.5f);
+            }
 
             int x = row.Left;
             var icaoRect = new Rectangle(x + 16, row.Top, ColumnIcao - 16, row.Height);
@@ -736,6 +1180,7 @@ namespace MsfsAirportPreloader
             _list.EndUpdate();
 
             RecomputeStats(states);
+            UpdateStateChrome(states.Count == 0);
 
             _statsStrip.Invalidate();
             _statusBar.Invalidate();
