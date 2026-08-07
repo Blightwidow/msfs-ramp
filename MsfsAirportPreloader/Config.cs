@@ -24,6 +24,12 @@ namespace MsfsAirportPreloader
         /// <summary>Start warming an airport's files once the aircraft is within this range.</summary>
         public double OuterRadiusNauticalMiles { get; set; } = 60.0;
 
+        /// <summary>
+        /// Don't warm airports closer than this — inside a few NM the sim has already streamed the
+        /// scenery (e.g. you spawned there), so warming would just re-read files pointlessly.
+        /// </summary>
+        public double InnerRadiusNauticalMiles { get; set; } = 5.0;
+
         /// <summary>How often to poll aircraft position and re-evaluate the prefetch queue.</summary>
         public double PollSeconds { get; set; } = 2.0;
 
@@ -75,6 +81,8 @@ namespace MsfsAirportPreloader
             config.OuterRadiusNauticalMiles = Math.Max(
                 MinimumOuterRadiusNauticalMiles,
                 ReadDouble(values, "OuterRadiusNauticalMiles", config.OuterRadiusNauticalMiles));
+            config.InnerRadiusNauticalMiles = Math.Max(
+                0.0, ReadDouble(values, "InnerRadiusNauticalMiles", config.InnerRadiusNauticalMiles));
             config.PollSeconds = ReadDouble(values, "PollSeconds", config.PollSeconds);
             config.RamBudgetMegabytes = (long)ReadDouble(values, "RamBudgetMegabytes", config.RamBudgetMegabytes);
             config.InstalledPackagesPathOverride = ReadString(values, "InstalledPackagesPath", config.InstalledPackagesPathOverride);
@@ -93,6 +101,9 @@ namespace MsfsAirportPreloader
             builder.AppendLine();
             builder.AppendLine("# Distance (NM) at which warming starts. Keep larger than MSFS's ~25 NM load radius.");
             builder.AppendLine(FormatDouble("OuterRadiusNauticalMiles", OuterRadiusNauticalMiles));
+            builder.AppendLine();
+            builder.AppendLine("# Don't warm airports closer than this (NM) — the sim has already loaded them.");
+            builder.AppendLine(FormatDouble("InnerRadiusNauticalMiles", InnerRadiusNauticalMiles));
             builder.AppendLine();
             builder.AppendLine("# Position re-check interval (seconds).");
             builder.AppendLine(FormatDouble("PollSeconds", PollSeconds));

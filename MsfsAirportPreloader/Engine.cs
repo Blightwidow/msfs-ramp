@@ -218,10 +218,11 @@ namespace MsfsAirportPreloader
                 return;
             }
 
-            double outerRadius;
+            double outerRadius, innerRadius;
             lock (_configGate)
             {
                 outerRadius = _config.OuterRadiusNauticalMiles;
+                innerRadius = _config.InnerRadiusNauticalMiles;
             }
 
             double releaseRadius = outerRadius + ReleaseMarginNauticalMiles;
@@ -231,6 +232,13 @@ namespace MsfsAirportPreloader
             {
                 double distance = Geo.DistanceNauticalMiles(
                     position.Latitude, position.Longitude, target.Latitude, target.Longitude);
+
+                if (distance < innerRadius)
+                {
+                    // Too close — the sim has already streamed this airport (e.g. you spawned here);
+                    // don't queue a pointless re-read. Anything we already warmed stays warm.
+                    continue;
+                }
 
                 if (distance <= outerRadius)
                 {
