@@ -151,8 +151,8 @@ namespace MsfsAirportPreloader
             Controls.Add(_overlay);    // Fill, above the list; shown only for takeovers
             Controls.Add(_logPanel);   // Bottom, above the footer, hidden by default
             Controls.Add(_statusBar);  // Bottom, outermost
-            Controls.Add(_banner);     // Top, just above the list
-            Controls.Add(_statsStrip); // Top, below the toolbar
+            Controls.Add(_statsStrip); // Top, innermost (just above the list)
+            Controls.Add(_banner);     // Top, above the cache/stats strip
             Controls.Add(_toolbar);    // Top, outermost
 
             ApplyTheme();
