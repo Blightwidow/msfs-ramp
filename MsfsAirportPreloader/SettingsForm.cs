@@ -23,7 +23,6 @@ namespace MsfsAirportPreloader
         private readonly Slider _ramSlider = new Slider();
         private readonly Label _ramValue = new Label();
         private readonly TextBox _packagesPath = new TextBox();
-        private readonly TextBox _simBriefUserId = new TextBox();
         private readonly ToggleSwitch _startWithWindows = new ToggleSwitch();
         private readonly ToggleSwitch _verbose = new ToggleSwitch();
 
@@ -49,7 +48,7 @@ namespace MsfsAirportPreloader
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(520, 704);
+            ClientSize = new Size(520, 626);
             BackColor = Theme.Window;
             ForeColor = Theme.Text;
             Font = Theme.Sans(9f);
@@ -134,22 +133,6 @@ namespace MsfsAirportPreloader
                 Text = indexed
                     ? $"✓ {_engine.IndexedPackageCount:#,0} packages found"
                     : "Scanning packages…",
-            });
-            y += 78;
-
-            // --- SimBrief ---
-            AddSection("SIMBRIEF", left, ref y);
-            AddFieldLabel("Pilot ID", left, y, fullWidth);
-            AddInput(_simBriefUserId, left, y + 18, fullWidth, null);
-            Controls.Add(new Label
-            {
-                Left = left,
-                Top = y + 56,
-                Width = fullWidth,
-                Height = 16,
-                Font = Theme.Sans(8.5f),
-                ForeColor = Theme.TextDim,
-                Text = "Numeric SimBrief Pilot ID. Warms your OFP's arrival + alternate first. Blank = off.",
             });
             y += 78;
 
@@ -415,7 +398,6 @@ namespace MsfsAirportPreloader
             // Show the actual folder in use — the saved override if any, otherwise the auto-detected
             // path — rather than an empty box, so the user can see and correct it.
             _packagesPath.Text = PackagePathResolver.Resolve(_original.InstalledPackagesPathOverride, null) ?? string.Empty;
-            _simBriefUserId.Text = _original.SimBriefUserId;
             _startWithWindows.Checked = _original.StartWithWindows;
             _verbose.Checked = _original.Verbose;
             _appearance = _original.Appearance;
@@ -467,7 +449,6 @@ namespace MsfsAirportPreloader
             updated.PollSeconds = ParseDouble(_pollSeconds.Text, _original.PollSeconds);
             updated.RamBudgetMegabytes = (long)Math.Round(_ramSlider.Value * 1024);
             updated.InstalledPackagesPathOverride = _packagesPath.Text.Trim();
-            updated.SimBriefUserId = _simBriefUserId.Text.Trim();
             // airports.csv path is no longer exposed in the UI; it stays whatever it was (blank =
             // the copy beside the app).
             updated.StartWithWindows = _startWithWindows.Checked;

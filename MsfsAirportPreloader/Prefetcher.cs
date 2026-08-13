@@ -52,10 +52,8 @@ namespace MsfsAirportPreloader
 
         /// <summary>
         /// Report a package's current distance. Queues it for warming if it isn't already.
-        /// <paramref name="pinned"/> = a SimBrief arrival/alternate: it's warmed before ordinary
-        /// proximity packages (see <see cref="TakeClosestQueued"/>) so it gets the RAM budget first.
         /// </summary>
-        public void Observe(PackageEntry entry, double distanceNauticalMiles, bool pinned = false)
+        public void Observe(PackageEntry entry, double distanceNauticalMiles)
         {
             string key = Key(entry);
             lock (_gate)
@@ -73,7 +71,6 @@ namespace MsfsAirportPreloader
                     _states[key] = state;
                 }
 
-                state.IsPinned = pinned;
                 state.DistanceNauticalMiles = distanceNauticalMiles;
 
                 // Re-arm from OutOfRange or a previous budget Skip; leave Warming/Loaded alone.
@@ -112,7 +109,6 @@ namespace MsfsAirportPreloader
 
                 state.WarmedBytes = 0;
                 state.State = PrefetchState.OutOfRange;
-                state.IsPinned = false; // out of range: drop any stale pin from a prior flight plan
             }
         }
 
@@ -170,9 +166,8 @@ namespace MsfsAirportPreloader
                         continue;
                     }
 
-                    // Pinned (SimBrief arrival/alternate) always outranks proximity packages so it
-                    // claims the RAM budget first; within the same pinned-ness, nearest wins.
-                    if (closest == null || IsHigherPriority(pair.Value, closest))
+                    // Nearest queued package wins — it reaches MSFS's load radius first.
+                    if (closest == null || pair.Value.DistanceNauticalMiles < closest.DistanceNauticalMiles)
                     {
                         closest = pair.Value;
                         closestKey = pair.Key;
@@ -187,18 +182,6 @@ namespace MsfsAirportPreloader
                 closest.State = PrefetchState.Warming;
                 return (closest, _entries[closestKey]);
             }
-        }
-
-        /// <summary>True if <paramref name="candidate"/> should warm before <paramref name="current"/>:
-        /// pinned before unpinned, then nearest first.</summary>
-        private static bool IsHigherPriority(AirportState candidate, AirportState current)
-        {
-            if (candidate.IsPinned != current.IsPinned)
-            {
-                return candidate.IsPinned;
-            }
-
-            return candidate.DistanceNauticalMiles < current.DistanceNauticalMiles;
         }
 
         private void WarmPackage(AirportState state, PackageEntry entry, byte[] buffer)
