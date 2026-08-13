@@ -142,30 +142,14 @@ loading screen, so re-reading is pure waste.
 - **Reset per flight** via a new `SimConnectClient.SimRunningChanged` event (fires on the camera-state
   transition); a fresh flight re-arms every airport.
 
-### SimBrief integration (implemented — alt E)
-`SimBriefUserId` (numeric Pilot ID) added to config + Settings panel. On launch and on each
-flight-start transition (`SimRunningChanged == true`), `Engine.RefreshSimBrief` fetches the latest
-OFP on a background thread and pins the endpoint ICAOs.
-
-- **Fetch/parse**: `SimBriefClient` hits the public XML fetcher
-  (`xml.fetcher.php?userid=<id>`) and reads `destination/icao_code` + `alternate/icao_code` with the
-  built-in `System.Xml.Linq` — **no JSON dependency added** (keeps the net48 zero-extra-deps stance).
-  TLS 1.2 forced (net48 default omits it). 10 s timeout. Every failure (no net, bad ID, empty OFP)
-  logs and returns null → silent fall back to proximity warming.
-- **Arrival + alternate only, NOT departure** (differs from the alt E sketch): departure is where you
-  spawn, so the sim has already streamed it and the inner-radius logic suppresses it anyway — warming
-  it would be wasted I/O.
-- **"Regardless of distance, first"**: `Engine.OnPosition` short-circuits pinned ICAOs past the
-  inner/outer/release/visited gates and calls `Prefetcher.Observe(entry, distance, pinned: true)`.
-  A new `pinned` flag on `AirportState` makes `TakeClosestQueued` pick pinned packages before
-  proximity ones, so they claim the RAM budget first — effective priority without a separate budget.
-- **Still in-flight-gated**: pinned warming obeys the existing `IsSimRunning` gate, so it never
-  competes with the loading screen; the destination warms during cruise. On flight end the pin set is
-  cleared and re-fetched next flight (picks up a regenerated OFP). `Release` also clears the pin so a
-  changed plan across flights doesn't leave a stale pinned row.
-- **UI**: coral `Theme.Pinned` colour; a dot in the ICAO gutter, a `PINNED` counter, and pinned rows
-  sorted to the top.
-- Doc caveat corrected: the method is `Prefetcher.Observe(entry, distance)`, not `Enqueue`.
+### SimBrief integration (reverted)
+Implemented as alt E, then removed. Pinning the SimBrief arrival + alternate and warming them
+regardless of distance did not measurably help — warmed pages were evicted from the standby list
+long before the destination came into range, so the extra machinery (SimBrief fetch/parse, the
+`pinned` flag, priority queueing, coral UI) bought nothing over plain proximity warming. A follow-up
+that hard-locked pinned pages with `VirtualLock` helped even less and was scrapped too. All of it —
+`SimBriefClient`, `SimBriefUserId`, the pin flag, and the pinned UI — was ripped back out. Proximity
+warming is the whole feature set again.
 
 ## Alternatives considered (not chosen yet)
 
@@ -192,23 +176,9 @@ agreement (distance BGL↔CSV, expect <1 NM), mismatches/misses. High coverage +
 switch to BGL; else keep CSV. Zero risk (read-only, CSV stays the source of truth during the probe).
 Crib record offsets/encoding from Little Navmap rather than reverse-engineering from scratch.
 
-### E. SimBrief integration — pre-fetch flight endpoints at launch
-Pull the user's latest OFP from the free SimBrief API and warm the **departure + destination**
-(and **alternate**) airports at startup, before the flight even begins — independent of aircraft
-position. Complements proximity prefetch: endpoints warmed immediately, enroute/arrival handled by
-the 60 NM proximity logic as usual.
-
-- API: `https://www.simbrief.com/api/xml.fetcher.php?userid=<SIMBRIEF_ID>` (also `&json=1`).
-  Returns latest generated OFP; fields `origin.icao_code`, `destination.icao_code`,
-  `alternate.icao_code`. No auth beyond the numeric user ID.
-- Config: add `SimBriefUserId` to `preloader.ini`; blank = feature off.
-- Flow at launch: fetch OFP → resolve each ICAO to package(s) via existing `PackageIndex` →
-  `Prefetcher.Enqueue`. Reuses everything already built; only adds a fetch + parse step.
-- Ties into a future **settings panel / GUI** (see backlog) where the user pastes their SimBrief ID.
-- Edge cases: no internet at launch (skip, fall back to proximity); OFP older than current flight
-  (warm anyway — cheap); ICAO not installed as a package (skip silently).
-- Value: kills the *departure*-taxi freeze too, and warms destination during cruise headroom rather
-  than racing the 60→25 NM window on approach.
+### E. SimBrief integration — pre-fetch flight endpoints at launch (tried, reverted)
+Built and removed — see "SimBrief integration (reverted)" above. Pinning the OFP endpoints didn't
+beat plain proximity warming (standby eviction erased the head start), so it was scrapped.
 
 ### C. RAM disk for hottest airports
 Mount a RAM disk, copy most-used airport packages there, symlink. Bypasses cache eviction entirely.
@@ -238,11 +208,10 @@ linking fragile. Not pursued.
 - [ ] **Flight-plan aware prefetch** — read active flight plan (dep/enroute/arr), warm along route.
       (Scope was deferred; v1 is approach-only.)
 - [ ] **Departure airport warm at sim start** — smooth first taxi/takeoff.
-- [x] **SimBrief integration** (alt E) — done. `SimBriefUserId` in settings; fetch latest OFP at
-      launch AND each flight start; pin **arrival + alternate** (NOT departure — you spawn there, the
-      sim already has it) and warm them first regardless of distance. See decision below.
-- [x] **Settings panel / GUI** — done in v1.2 (WinForms). SimBrief ID field still to add when alt E
-      lands; everything else (radius, poll, RAM, paths, start-with-Windows, verbose) is editable.
+- [~] **SimBrief integration** (alt E) — built, then reverted; pinning endpoints didn't beat
+      proximity warming (standby eviction). See "SimBrief integration (reverted)" above.
+- [x] **Settings panel / GUI** — done in v1.2 (WinForms). Radius, poll, RAM, paths,
+      start-with-Windows, and verbose are editable.
 - [ ] **Adaptive OuterRadius** — scale trigger distance by package size ÷ measured HDD read speed so
       warming always finishes before 25 NM.
 - [x] **Drop monotonic RAM budget** — done in v1.2: budget freed on `Release()` when flying away.

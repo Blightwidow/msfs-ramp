@@ -41,10 +41,6 @@ unloads and a later return or divert warms it again normally.
 | **Skipped** | amber | In range but the RAM budget was full. Nothing is lost. |
 | **Unloaded** | grey | Out of range, or flown far enough away to be released. |
 
-A **coral dot** left of the ICAO (and a **PINNED** counter) marks airports from your SimBrief
-flight plan — the arrival and alternate. They warm first, regardless of distance, and sort to the
-top of the list.
-
 ## The states you'll see
 
 RAMP shows one window that adapts to the situation:
@@ -73,10 +69,6 @@ RAMP shows one window that adapts to the situation:
 - **Memory** — a *RAM budget* slider (with your free RAM shown for reference). Applies on next launch.
 - **Paths** — your MSFS package folder, pre-filled with the detected path; edit it if auto-detect was
   wrong. Changing it triggers a rescan.
-- **SimBrief** — your numeric *Pilot ID*. Set it and RAMP fetches your latest OFP on launch and at
-  each flight start, then warms the **arrival + alternate** airports first, regardless of distance —
-  so your destination warms during cruise instead of racing the 60→25 NM window on approach. Blank
-  disables it; proximity warming is unaffected either way.
 - **Behaviour** — *Start with Windows* and *Verbose logging*.
 - **Appearance** — theme: *Follow system*, *Light*, or *Dark*.
 
