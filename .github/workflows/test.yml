@@ -1,0 +1,18 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    # The test project compiles only the portable core (net8.0), so it needs neither
+    # Windows nor the SimConnect SDK DLLs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Test
+        run: dotnet test MsfsAirportPreloader.Tests --configuration Release
