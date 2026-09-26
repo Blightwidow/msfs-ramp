@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Unit tests for the portable logic core. The app itself is net48 + SimConnect (Windows only),
+    so the tests compile the platform-neutral source files directly into a net8.0 test assembly
+    instead of referencing the app project. Runs on Windows, macOS and Linux:
+      dotnet test MsfsAirportPreloader.Tests
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>MsfsAirportPreloader.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\MsfsAirportPreloader\AirportDatabase.cs" Link="Core\AirportDatabase.cs" />
+    <Compile Include="..\MsfsAirportPreloader\AirportState.cs" Link="Core\AirportState.cs" />
+    <Compile Include="..\MsfsAirportPreloader\Geo.cs" Link="Core\Geo.cs" />
+    <Compile Include="..\MsfsAirportPreloader\PackageIndex.cs" Link="Core\PackageIndex.cs" />
+    <Compile Include="..\MsfsAirportPreloader\Prefetcher.cs" Link="Core\Prefetcher.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+</Project>

@@ -119,6 +119,18 @@ Output: `bin/Release/net48/RAMP.exe`. `SimConnect.dll`, `airports.csv`, and
 | `BadImageFormatException` at startup | Architecture mismatch — build **x64** (managed + native SimConnect are 64-bit). |
 | Runtime: `no airports loaded from ...airports.csv` | Step 2 not done, or wrong header. Use the OurAirports file unmodified. |
 
+## Tests
+
+The platform-neutral core (`Geo`, `AirportDatabase`, `PackageIndex`, `Prefetcher`) is covered by an
+xUnit project that compiles those source files into a `net8.0` test assembly, so it runs on Windows,
+macOS or Linux without SimConnect:
+
+```
+dotnet test MsfsAirportPreloader.Tests
+```
+
+Requires the **.NET 8 SDK**.
+
 ## Using it
 
 Launch `RAMP.exe` (with MSFS open or closed). It scans your scenery packages once, then waits for the
@@ -158,6 +170,7 @@ MsfsAirportPreloader/
   StartupRegistry.cs       "start with Windows" registry entry
   Geo.cs                   haversine distance
   Config.cs                preloader.ini load/save
+MsfsAirportPreloader.Tests/  xUnit tests for the portable core (net8.0, no SimConnect)
 ```
 
 See also [docs/USAGE.md](docs/USAGE.md) and the design brief / ideas in [docs/](docs/).
