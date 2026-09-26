@@ -55,7 +55,8 @@ RAMP shows one window that adapts to the situation:
 4. **Warming.** The busy state — the approaching airport carries a progress bar, queued airports sit
    beneath it in distance order.
 5. **RAM budget full.** An amber banner: the budget is reached and some fields were skipped. Your
-   destination is loaded first; a **Raise to N GB** button bumps the budget (applies next launch).
+   destination is loaded first; a **Raise to N GB** button bumps the budget and warms the skipped
+   fields right away.
 6. **Needs attention.** If RAMP can't find your MSFS package folder, it says so with the path it tried
    and an **Open Settings** button. (Amber, never red — nothing is lost.)
 7. **Minimised to tray.** The tray glyph recolours to the dominant state; hover it for a live readout.
@@ -66,7 +67,8 @@ RAMP shows one window that adapts to the situation:
 
 - **Range & timing** — *Outer radius* (how far out warming starts; minimum 30 NM, since MSFS loads
   scenery near 25 NM) and *Poll interval* (how often position is checked). Both apply live.
-- **Memory** — a *RAM budget* slider (with your free RAM shown for reference). Applies on next launch.
+- **Memory** — a *RAM budget* slider (with your free RAM shown for reference). Applies live: raising
+  it warms any skipped fields.
 - **Paths** — your MSFS package folder, pre-filled with the detected path; edit it if auto-detect was
   wrong. Changing it triggers a rescan.
 - **Behaviour** — *Start with Windows* and *Verbose logging*.

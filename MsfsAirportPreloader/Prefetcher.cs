@@ -22,7 +22,7 @@ namespace MsfsAirportPreloader
     /// </summary>
     internal sealed class Prefetcher : IDisposable
     {
-        private readonly long _ramBudgetBytes;
+        private long _ramBudgetBytes; // mutable: SetRamBudget applies settings live
         private readonly Action<string> _log;
         private readonly object _gate = new object();
         private readonly Dictionary<string, AirportState> _states = new Dictionary<string, AirportState>(StringComparer.OrdinalIgnoreCase);
@@ -37,7 +37,7 @@ namespace MsfsAirportPreloader
 
         public Prefetcher(long ramBudgetMegabytes, Action<string> log)
         {
-            _ramBudgetBytes = ramBudgetMegabytes * 1024L * 1024L;
+            _ramBudgetBytes = MegabytesToBytes(ramBudgetMegabytes);
             _log = log;
             _worker = new Thread(WorkerLoop)
             {
@@ -49,6 +49,48 @@ namespace MsfsAirportPreloader
         }
 
         private static string Key(PackageEntry entry) => entry.Icao + "|" + entry.PackageName;
+
+        private static long MegabytesToBytes(long megabytes) => megabytes * 1024L * 1024L;
+
+        private long RamBudgetBytes => Interlocked.Read(ref _ramBudgetBytes);
+
+        private bool BudgetFull => Interlocked.Read(ref _bytesWarmed) >= RamBudgetBytes;
+
+        /// <summary>
+        /// Change the RAM budget without a restart. Raising it re-queues every package the old
+        /// budget skipped, so they warm right away (closest first). Lowering it never evicts what
+        /// is already warm; it only stops further warming until the total drops below the new cap.
+        /// </summary>
+        public void SetRamBudget(long ramBudgetMegabytes)
+        {
+            long newBudgetBytes = MegabytesToBytes(ramBudgetMegabytes);
+            long previousBudgetBytes = Interlocked.Exchange(ref _ramBudgetBytes, newBudgetBytes);
+            if (newBudgetBytes == previousBudgetBytes)
+            {
+                return;
+            }
+
+            _log?.Invoke($"[budget] RAM budget {previousBudgetBytes / (1024 * 1024)} MB -> " +
+                         $"{newBudgetBytes / (1024 * 1024)} MB");
+
+            if (newBudgetBytes < previousBudgetBytes)
+            {
+                return;
+            }
+
+            lock (_gate)
+            {
+                foreach (AirportState state in _states.Values)
+                {
+                    if (state.State == PrefetchState.Skipped)
+                    {
+                        state.State = PrefetchState.Queued;
+                    }
+                }
+            }
+
+            _signal.Set();
+        }
 
         /// <summary>
         /// Report a package's current distance. Queues it for warming if it isn't already.
@@ -186,7 +228,7 @@ namespace MsfsAirportPreloader
 
         private void WarmPackage(AirportState state, PackageEntry entry, byte[] buffer)
         {
-            if (_bytesWarmed >= _ramBudgetBytes)
+            if (BudgetFull)
             {
                 lock (_gate)
                 {
@@ -201,14 +243,22 @@ namespace MsfsAirportPreloader
             long warmedThisPackage = 0;
             int fileCount = 0;
 
+            // A package the budget cut off part-way resumes where it stopped: its first
+            // WarmedBytes are already counted, and re-reading them would charge them twice.
+            long bytesToSkip;
+            lock (_gate)
+            {
+                bytesToSkip = state.WarmedBytes;
+            }
+
             foreach (string filePath in entry.AbsoluteFilePaths)
             {
-                if (!_running || _bytesWarmed >= _ramBudgetBytes)
+                if (!_running || BudgetFull)
                 {
                     break;
                 }
 
-                long warmed = WarmFile(filePath, buffer);
+                long warmed = WarmFile(filePath, buffer, ref bytesToSkip);
                 warmedThisPackage += warmed;
                 lock (_gate)
                 {
@@ -223,7 +273,7 @@ namespace MsfsAirportPreloader
                 // Only finalize if it wasn't released mid-warm.
                 if (state.State == PrefetchState.Warming)
                 {
-                    state.State = _bytesWarmed >= _ramBudgetBytes && warmedThisPackage < entry.TotalBytes
+                    state.State = BudgetFull && state.WarmedBytes < entry.TotalBytes
                         ? PrefetchState.Skipped
                         : PrefetchState.Loaded;
                 }
@@ -234,7 +284,9 @@ namespace MsfsAirportPreloader
                          $"(cache total {_bytesWarmed / (1024 * 1024)} MB)");
         }
 
-        private long WarmFile(string filePath, byte[] buffer)
+        /// <summary>Reads a file to warm it, first skipping <paramref name="bytesToSkip"/> bytes that
+        /// an earlier, interrupted pass already warmed (consumed across the package's files).</summary>
+        private long WarmFile(string filePath, byte[] buffer, ref long bytesToSkip)
         {
             long warmed = 0;
             try
@@ -247,12 +299,21 @@ namespace MsfsAirportPreloader
                     buffer.Length,
                     FileOptions.SequentialScan);
 
+                if (bytesToSkip >= stream.Length)
+                {
+                    bytesToSkip -= stream.Length;
+                    return 0;
+                }
+
+                stream.Seek(bytesToSkip, SeekOrigin.Begin);
+                bytesToSkip = 0;
+
                 int read;
                 while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
                 {
                     warmed += read;
                     Interlocked.Add(ref _bytesWarmed, read);
-                    if (!_running || _bytesWarmed >= _ramBudgetBytes)
+                    if (!_running || BudgetFull)
                     {
                         break;
                     }

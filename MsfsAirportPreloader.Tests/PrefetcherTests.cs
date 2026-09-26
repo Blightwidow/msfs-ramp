@@ -77,6 +77,52 @@ namespace MsfsAirportPreloader.Tests
             Assert.Equal(PrefetchState.OutOfRange, StateOf(prefetcher, "LFPG").State);
         }
 
+        [Fact]
+        public void RaisingBudgetWarmsSkippedPackage()
+        {
+            using var prefetcher = new Prefetcher(ramBudgetMegabytes: 1, log: null);
+            prefetcher.Paused = true;
+            prefetcher.Observe(CreatePackage("LFPG", sizeInMegabytes: 1), distanceNauticalMiles: 10);
+            prefetcher.Observe(CreatePackage("LFPO", sizeInMegabytes: 1), distanceNauticalMiles: 50);
+            prefetcher.Paused = false;
+            WaitForSettledState(prefetcher, "LFPO");
+
+            prefetcher.SetRamBudget(ramBudgetMegabytes: 2);
+
+            Assert.Equal(PrefetchState.Loaded, WaitForSettledState(prefetcher, "LFPO"));
+        }
+
+        [Fact]
+        public void LoweringBudgetSkipsNextPackage()
+        {
+            using var prefetcher = new Prefetcher(ramBudgetMegabytes: 4, log: null);
+            prefetcher.Observe(CreatePackage("LFPG", sizeInMegabytes: 1), distanceNauticalMiles: 10);
+            WaitForSettledState(prefetcher, "LFPG");
+
+            prefetcher.SetRamBudget(ramBudgetMegabytes: 1);
+            prefetcher.Observe(CreatePackage("LFPO", sizeInMegabytes: 1), distanceNauticalMiles: 50);
+
+            Assert.Equal(PrefetchState.Skipped, WaitForSettledState(prefetcher, "LFPO"));
+        }
+
+        [Fact]
+        public void ResumedPackageCountsEachByteOnce()
+        {
+            // 2 MB budget: LFPG takes 1 MB, so LFPO (2 MB) is cut off after its first 1 MB.
+            using var prefetcher = new Prefetcher(ramBudgetMegabytes: 2, log: null);
+            prefetcher.Paused = true;
+            prefetcher.Observe(CreatePackage("LFPG", sizeInMegabytes: 1), distanceNauticalMiles: 10);
+            prefetcher.Observe(CreatePackage("LFPO", sizeInMegabytes: 2), distanceNauticalMiles: 50);
+            prefetcher.Paused = false;
+            WaitForSettledState(prefetcher, "LFPO");
+
+            // Resuming must read only the unread second half, not re-read and re-charge the first.
+            prefetcher.SetRamBudget(ramBudgetMegabytes: 8);
+            WaitForSettledState(prefetcher, "LFPO");
+
+            Assert.Equal(2 * OneMegabyte, StateOf(prefetcher, "LFPO").WarmedBytes);
+        }
+
         private PackageEntry CreatePackage(string icao, int sizeInMegabytes)
         {
             string filePath = Path.Combine(_temporaryDirectory, icao + ".bgl");

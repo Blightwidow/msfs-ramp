@@ -312,6 +312,8 @@ namespace MsfsAirportPreloader
                 _config = newConfig;
             }
 
+            _prefetcher?.SetRamBudget(newConfig.RamBudgetMegabytes);
+
             if (rescanPackages)
             {
                 Log("Settings changed — rescanning packages.");
