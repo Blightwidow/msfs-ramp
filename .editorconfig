@@ -1,0 +1,37 @@
+# Matches the existing code style so `dotnet format --verify-no-changes` passes as-is.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{csproj,props,targets,xml,yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Allman braces, one-line members/blocks allowed (compact style).
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+# Several initializer members per line (e.g. Theme palettes).
+csharp_new_line_before_members_in_object_initializers = false
+csharp_new_line_before_members_in_anonymous_types = false
+csharp_new_line_between_query_expression_clauses = true
+
+# Code-style preferences matching current code (explicit `new T()`, classic switch statements).
+csharp_style_implicit_object_creation_when_type_is_apparent = false:silent
+csharp_style_prefer_switch_expression = false:silent
+csharp_style_prefer_not_pattern = false:silent
+dotnet_style_object_initializer = true:silent

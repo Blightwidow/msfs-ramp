@@ -224,11 +224,14 @@ linking fragile. Not pursued.
 - [x] **Completion balloon** — done v1.4 (one per flight; approximates "destination" as nearest
       Loaded — see below for the heading-aware refinement).
 - [ ] **Force-warm on close** — at an inner radius (~25 NM) warm the destination even if budget hit.
-- [ ] **RAM budget live-apply** — currently needs restart (set in `Prefetcher` ctor); make mutable.
+- [x] **RAM budget live-apply** — `Prefetcher.SetRamBudget`, called from `Engine.ApplyConfig`.
+      Raising re-queues Skipped packages; a package cut off part-way resumes instead of re-reading
+      (and double-counting) what it already warmed.
 - [ ] **Persist window size/position + column widths.**
 - [ ] **Re-warm on eviction** — detect if pages likely evicted (time/other-activity) and re-read.
-- [ ] **Portable logic core** — extract parse/geo/queue behind `#ifdef`/interface so it compiles &
-      unit-tests off-Windows.
+- [~] **Portable logic core** — `MsfsAirportPreloader.Tests` (net8.0 xUnit) compiles `Geo`,
+      `AirportDatabase`, `PackageIndex`, `Prefetcher` directly and runs off-Windows. Next: tests for
+      `PackageIndex` ICAO matching and `Config` round-trip.
 - [ ] **Verify effectiveness** — before/after frame-time capture on approach to prove the freeze is gone.
 - [ ] **Handcrafted-airport handling** — investigate whether sub-ranges of `fs-base` can be targeted.
 - [ ] **Package→ICAO matching** — replace token heuristic with reading airport ICAO from BGL directly.
